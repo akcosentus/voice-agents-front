@@ -132,13 +132,17 @@ export default function BatchesPage() {
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
-                      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-                        <MoreHorizontal size={16} />
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal size={16} />
+                        </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem render={<Link href={`/batches/${batch.id}`} />}>
-                          <Eye size={14} />
-                          View Batch
+                        <DropdownMenuItem asChild>
+                          <Link href={`/batches/${batch.id}`}>
+                            <Eye size={14} />
+                            View Batch
+                          </Link>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleDownloadOriginal(batch)}>

@@ -17,8 +17,10 @@ export function Header() {
       <div />
       <div className="flex items-center gap-3">
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-            <User size={18} />
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <User size={18} />
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={8}>
             <DropdownMenuLabel>My Account</DropdownMenuLabel>

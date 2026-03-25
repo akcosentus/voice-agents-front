@@ -128,10 +128,12 @@ export default function BatchDetailPage({
           </p>
         </div>
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
-            <Download size={14} />
-            Downloads
-            <ChevronDown size={14} />
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Download size={14} />
+              Downloads
+              <ChevronDown size={14} />
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={handleDownloadOriginal}>
@@ -219,13 +221,17 @@ export default function BatchDetailPage({
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
-                        <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-                          <MoreHorizontal size={16} />
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal size={16} />
+                          </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem render={<Link href={`/calls/${call.id}`} />}>
-                            <Eye size={14} />
-                            View Call
+                          <DropdownMenuItem asChild>
+                            <Link href={`/calls/${call.id}`}>
+                              <Eye size={14} />
+                              View Call
+                            </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => navigator.clipboard.writeText(call.id)}

@@ -5,7 +5,18 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import type { Call } from "@/lib/types"
 import { StatusBadge } from "@/components/status-badge"
-import { formatAgentName, formatDuration, formatPhone, relativeTime, truncate, truncateId } from "@/lib/utils"
+import { AudioPlayer } from "@/components/audio-player"
+import { TranscriptViewer } from "@/components/transcript-viewer"
+import { AnalysisCard } from "@/components/analysis-card"
+import { CaseDataCard } from "@/components/case-data-card"
+import {
+  formatAgentName,
+  formatDuration,
+  formatPhone,
+  formatDateTime,
+  relativeTime,
+  truncateId,
+} from "@/lib/utils"
 import {
   Table,
   TableBody,
@@ -22,19 +33,29 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Eye, Phone, ChevronLeft, ChevronRight, MoreHorizontal, Copy } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import {
+  Phone,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Check,
+  AlertTriangle,
+  ExternalLink,
+} from "lucide-react"
 
 const PAGE_SIZE = 20
 
 const CALL_STATUSES = [
-  { value: "all", label: "All Statuses" },
+  { value: "all", label: "All" },
   { value: "pending", label: "Pending" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
@@ -51,6 +72,7 @@ export default function CallsPage() {
   const [directionFilter, setDirectionFilter] = useState("all")
   const [agentFilter, setAgentFilter] = useState("all")
   const [agents, setAgents] = useState<string[]>([])
+  const [selectedCall, setSelectedCall] = useState<Call | null>(null)
 
   const fetchCalls = useCallback(async () => {
     setLoading(true)
@@ -59,19 +81,12 @@ export default function CallsPage() {
       .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
 
-    if (statusFilter !== "all") {
-      query = query.eq("status", statusFilter)
-    }
-    if (directionFilter !== "all") {
-      query = query.eq("direction", directionFilter)
-    }
-    if (agentFilter !== "all") {
-      query = query.eq("agent_name", agentFilter)
-    }
+    if (statusFilter !== "all") query = query.eq("status", statusFilter)
+    if (directionFilter !== "all") query = query.eq("direction", directionFilter)
+    if (agentFilter !== "all") query = query.eq("agent_name", agentFilter)
 
     const from = page * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
-    query = query.range(from, to)
+    query = query.range(from, from + PAGE_SIZE - 1)
 
     const { data, count } = await query
     setCalls((data as Call[]) ?? [])
@@ -79,15 +94,11 @@ export default function CallsPage() {
     setLoading(false)
   }, [page, statusFilter, directionFilter, agentFilter])
 
-  useEffect(() => {
-    fetchCalls()
-  }, [fetchCalls])
+  useEffect(() => { fetchCalls() }, [fetchCalls])
 
   useEffect(() => {
     async function fetchAgents() {
-      const { data } = await supabase
-        .from("calls")
-        .select("agent_name")
+      const { data } = await supabase.from("calls").select("agent_name")
       if (data) {
         const unique = [...new Set(data.map((d: { agent_name: string }) => d.agent_name))].filter(Boolean)
         setAgents(unique as string[])
@@ -97,9 +108,10 @@ export default function CallsPage() {
   }, [])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
+  const hasFilters = statusFilter !== "all" || directionFilter !== "all" || agentFilter !== "all"
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Calls</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -107,72 +119,61 @@ export default function CallsPage() {
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Select
-          value={statusFilter}
-          onValueChange={(val) => {
-            setStatusFilter(val ?? "all")
-            setPage(0)
-          }}
-        >
-          <SelectTrigger className="w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CALL_STATUSES.map((s) => (
-              <SelectItem key={s.value} value={s.value}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Status</Label>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v ?? "all"); setPage(0) }}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CALL_STATUSES.map((s) => (
+                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select
-          value={directionFilter}
-          onValueChange={(val) => {
-            setDirectionFilter(val ?? "all")
-            setPage(0)
-          }}
-        >
-          <SelectTrigger className="w-[150px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Directions</SelectItem>
-            <SelectItem value="outbound">Outbound</SelectItem>
-            <SelectItem value="inbound">Inbound</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Direction</Label>
+          <Select value={directionFilter} onValueChange={(v) => { setDirectionFilter(v ?? "all"); setPage(0) }}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="outbound">Outbound</SelectItem>
+              <SelectItem value="inbound">Inbound</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select
-          value={agentFilter}
-          onValueChange={(val) => {
-            setAgentFilter(val ?? "all")
-            setPage(0)
-          }}
-        >
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="All Agents" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Agents</SelectItem>
-            {agents.map((a) => (
-              <SelectItem key={a} value={a}>
-                {formatAgentName(a)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Agent</Label>
+          <Select value={agentFilter} onValueChange={(v) => { setAgentFilter(v ?? "all"); setPage(0) }}>
+            <SelectTrigger className="w-[190px]">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              {agents.map((a) => (
+                <SelectItem key={a} value={a}>{formatAgentName(a)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <span className="text-sm text-muted-foreground">
-          {total} total call{total !== 1 ? "s" : ""}
+        <span className="pb-1.5 text-sm text-muted-foreground">
+          {total} call{total !== 1 ? "s" : ""}
         </span>
       </div>
 
+      {/* Table */}
       {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-md" />
+        <div className="space-y-2">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <Skeleton key={i} className="h-11 w-full rounded-md" />
           ))}
         </div>
       ) : calls.length === 0 ? (
@@ -180,11 +181,9 @@ export default function CallsPage() {
           <Phone size={40} className="text-muted-foreground/50" />
           <h3 className="mt-4 text-lg font-medium">No calls found</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {statusFilter !== "all" || directionFilter !== "all" || agentFilter !== "all"
-              ? "Try adjusting your filters."
-              : "No calls yet. Run a batch to get started."}
+            {hasFilters ? "Try adjusting your filters." : "No calls yet. Run a batch to get started."}
           </p>
-          {statusFilter === "all" && directionFilter === "all" && agentFilter === "all" && (
+          {!hasFilters && (
             <Link href="/batches" className="mt-2 text-sm font-medium text-[var(--color-brand)] hover:underline">
               Go to Batches
             </Link>
@@ -196,71 +195,45 @@ export default function CallsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Call ID</TableHead>
+                  <TableHead className="w-[80px]">ID</TableHead>
                   <TableHead>Agent</TableHead>
-                  <TableHead>Phone Number</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Direction</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Duration</TableHead>
-                  <TableHead className="min-w-[180px]">AI Notes</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead className="w-[70px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {calls.map((call) => {
-                  const notes =
-                    typeof call.post_call_analyses?.call_notes === "string"
-                      ? call.post_call_analyses.call_notes
-                      : ""
-                  return (
-                    <TableRow key={call.id}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {truncateId(call.id)}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {formatAgentName(call.agent_name)}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {formatPhone(call.target_number)}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={call.direction} />
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={call.status} />
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {formatDuration(call.duration_secs)}
-                      </TableCell>
-                      <TableCell className="max-w-[220px] text-xs text-muted-foreground">
-                        {notes ? truncate(notes, 80) : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {relativeTime(call.created_at)}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-                            <MoreHorizontal size={16} />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem render={<Link href={`/calls/${call.id}`} />}>
-                              <Eye size={14} />
-                              View Call
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => navigator.clipboard.writeText(call.id)}
-                            >
-                              <Copy size={14} />
-                              Copy Call ID
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
+                {calls.map((call) => (
+                  <TableRow
+                    key={call.id}
+                    className="cursor-pointer transition-colors hover:bg-muted/50"
+                    onClick={() => setSelectedCall(call)}
+                  >
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {truncateId(call.id).slice(0, 8)}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {formatAgentName(call.agent_name)}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {formatPhone(call.target_number)}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={call.direction} />
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={call.status} />
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {formatDuration(call.duration_secs)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {relativeTime(call.created_at)}
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
@@ -271,29 +244,143 @@ export default function CallsPage() {
                 Page {page + 1} of {totalPages}
               </p>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                >
-                  <ChevronLeft size={16} className="mr-1" />
-                  Previous
+                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
+                  <ChevronLeft size={16} className="mr-1" /> Previous
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={page >= totalPages - 1}
-                >
-                  Next
-                  <ChevronRight size={16} className="ml-1" />
+                <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages - 1}>
+                  Next <ChevronRight size={16} className="ml-1" />
                 </Button>
               </div>
             </div>
           )}
         </>
       )}
+
+      {/* Side Panel */}
+      <Sheet open={!!selectedCall} onOpenChange={(open) => { if (!open) setSelectedCall(null) }}>
+        <SheetContent
+          side="right"
+          className="w-full overflow-y-auto sm:w-[48%] sm:max-w-none"
+        >
+          {selectedCall && <CallPanel call={selectedCall} />}
+        </SheetContent>
+      </Sheet>
+    </div>
+  )
+}
+
+// ─── Side Panel Content ───
+
+function CallPanel({ call }: { call: Call }) {
+  const [copiedId, setCopiedId] = useState(false)
+
+  const copyId = () => {
+    navigator.clipboard.writeText(call.id)
+    setCopiedId(true)
+    setTimeout(() => setCopiedId(false), 2000)
+  }
+
+  return (
+    <>
+      {/* Header */}
+      <SheetHeader className="space-y-3 pr-8">
+        <div className="flex items-center gap-2">
+          <StatusBadge status={call.status} />
+          <StatusBadge status={call.direction} />
+        </div>
+        <SheetTitle className="text-lg">
+          {formatAgentName(call.agent_name)}
+        </SheetTitle>
+        <SheetDescription className="flex items-center gap-3 text-sm">
+          <span className="font-mono">{formatPhone(call.target_number)}</span>
+          <span className="text-border">·</span>
+          <span>{formatDuration(call.duration_secs)}</span>
+        </SheetDescription>
+      </SheetHeader>
+
+      <div className="space-y-6 px-4 pb-8">
+        {/* Error */}
+        {call.error && (
+          <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-600" />
+            <div>
+              <p className="text-xs font-medium text-red-800">Error</p>
+              <p className="mt-0.5 text-sm text-red-700">{call.error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Audio */}
+        <section>
+          <SectionLabel>Recording</SectionLabel>
+          <AudioPlayer recordingPath={call.recording_path} />
+        </section>
+
+        {/* AI Analysis */}
+        <section>
+          <SectionLabel>AI Analysis</SectionLabel>
+          <AnalysisCard analyses={call.post_call_analyses ?? {}} compact />
+        </section>
+
+        {/* Transcript */}
+        <section>
+          <SectionLabel>Transcript</SectionLabel>
+          <TranscriptViewer transcript={call.transcript ?? []} />
+        </section>
+
+        {/* Call Info */}
+        <section>
+          <SectionLabel>Call Info</SectionLabel>
+          <div className="space-y-2.5 rounded-lg border border-border p-4">
+            <InfoRow label="Call ID">
+              <button onClick={copyId} className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground">
+                <span className="break-all">{call.id}</span>
+                {copiedId ? <Check size={12} className="shrink-0 text-emerald-600" /> : <Copy size={12} className="shrink-0" />}
+              </button>
+            </InfoRow>
+            <InfoRow label="Started">{formatDateTime(call.started_at)}</InfoRow>
+            <InfoRow label="Ended">{formatDateTime(call.ended_at)}</InfoRow>
+            {call.batch_id && (
+              <InfoRow label="Batch">
+                <Link href={`/batches/${call.batch_id}`} className="inline-flex items-center gap-1 text-sm text-[var(--color-brand)] hover:underline">
+                  View Batch <ExternalLink size={12} />
+                </Link>
+              </InfoRow>
+            )}
+          </div>
+        </section>
+
+        {/* Case Data */}
+        <section>
+          <CaseDataCard data={call.case_data ?? {}} />
+        </section>
+
+        {/* Link to full page */}
+        <Link
+          href={`/calls/${call.id}`}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ExternalLink size={12} />
+          Open full page
+        </Link>
+      </div>
+    </>
+  )
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      {children}
+    </h3>
+  )
+}
+
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
+      <span className="text-right text-sm">{children}</span>
     </div>
   )
 }
