@@ -15,10 +15,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, Download, Eye, FileSpreadsheet } from "lucide-react"
+import { ArrowLeft, Download, Eye, FileSpreadsheet, MoreHorizontal, ChevronDown, Copy } from "lucide-react"
 
 export default function BatchDetailPage({
   params,
@@ -120,16 +127,25 @@ export default function BatchDetailPage({
             {batch.from_number && ` · From ${formatPhone(batch.from_number)}`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleDownloadOriginal}>
-            <FileSpreadsheet size={14} className="mr-1.5" />
-            Original
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleDownloadResults}>
-            <Download size={14} className="mr-1.5" />
-            Results
-          </Button>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-input bg-transparent px-3 text-sm font-medium outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Download size={14} />
+            Downloads
+            <ChevronDown size={14} className="text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleDownloadOriginal}>
+              <FileSpreadsheet size={14} />
+              Original File
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleDownloadResults}>
+              <Download size={14} />
+              Results File
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -204,9 +220,25 @@ export default function BatchDetailPage({
                       {truncate(notes, 100)}
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" render={<Link href={`/calls/${call.id}`} />}>
-                        <Eye size={16} />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <MoreHorizontal size={16} />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem render={<Link href={`/calls/${call.id}`} />}>
+                            <Eye size={14} />
+                            View Call
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => navigator.clipboard.writeText(call.id)}
+                          >
+                            <Copy size={14} />
+                            Copy Call ID
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 )

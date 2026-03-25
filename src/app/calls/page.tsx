@@ -21,9 +21,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Eye, Phone, ChevronLeft, ChevronRight } from "lucide-react"
+import { Eye, Phone, ChevronLeft, ChevronRight, MoreHorizontal, Copy } from "lucide-react"
 
 const PAGE_SIZE = 20
 
@@ -197,9 +203,25 @@ export default function CallsPage() {
                       {formatDate(call.created_at)}
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" render={<Link href={`/calls/${call.id}`} />}>
-                        <Eye size={16} />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <MoreHorizontal size={16} />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem render={<Link href={`/calls/${call.id}`} />}>
+                            <Eye size={14} />
+                            View Call
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => navigator.clipboard.writeText(call.id)}
+                          >
+                            <Copy size={14} />
+                            Copy Call ID
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}

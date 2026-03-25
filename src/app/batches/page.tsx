@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import type { Batch } from "@/lib/types"
 import { StatusBadge } from "@/components/status-badge"
 import { NewBatchModal } from "@/components/new-batch-modal"
+import { downloadResults } from "@/lib/api"
 import { formatDate } from "@/lib/utils"
 import {
   Table,
@@ -15,13 +16,40 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Eye, Layers } from "lucide-react"
+import { MoreHorizontal, Eye, Download, FileSpreadsheet, Layers } from "lucide-react"
 
 export default function BatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([])
   const [loading, setLoading] = useState(true)
+
+  const handleDownloadResults = async (batchId: string) => {
+    const blob = await downloadResults(batchId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `batch-${batchId}-results.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadOriginal = async (batch: Batch) => {
+    if (!batch.input_file_path) return
+    const { data } = await supabase.storage
+      .from("batch-files")
+      .createSignedUrl(batch.input_file_path, 3600)
+    if (data?.signedUrl) {
+      window.open(data.signedUrl, "_blank")
+    }
+  }
 
   const fetchBatches = useCallback(async () => {
     setLoading(true)
@@ -103,9 +131,28 @@ export default function BatchesPage() {
                     {formatDate(batch.created_at)}
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm" render={<Link href={`/batches/${batch.id}`} />}>
-                      <Eye size={16} />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <MoreHorizontal size={16} />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem render={<Link href={`/batches/${batch.id}`} />}>
+                          <Eye size={14} />
+                          View Batch
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleDownloadOriginal(batch)}>
+                          <FileSpreadsheet size={14} />
+                          Download Original
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownloadResults(batch.id)}>
+                          <Download size={14} />
+                          Download Results
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
