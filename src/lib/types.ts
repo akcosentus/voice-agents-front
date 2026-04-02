@@ -71,33 +71,100 @@ export interface BatchStatusResponse {
   failed: number
 }
 
+/** Tool is now an object, not a string */
+export interface AgentTool {
+  type: string
+  description: string
+  settings: Record<string, unknown>
+}
+
 export interface Agent {
+  id: string
   name: string
   display_name: string
   description: string
-  type: "outbound" | "inbound"
-  llm: { provider: string; model: string }
-  tts: {
-    provider: string
-    voice_id: string
-    model: string
-    settings: {
-      stability: number
-      similarity_boost: number
-      style: number
-      use_speaker_boost: boolean
-      speed: number
-    }
-  }
-  stt: { provider: string }
-  tools: string[]
-  first_message: string
-  prompt_variables: string[]
-  prompt_preview: string
+  llm_provider: string
+  llm_model: string
   temperature: number
   max_tokens: number
-  recording: { enabled: boolean; channels: number }
-  telephony: { phone_number: string }
-  transfer_targets: Record<string, string>
-  post_call_analyses: { name: string; model: string; output_type: string }[]
+  enable_prompt_caching: boolean
+  tts_provider: string
+  tts_voice_id: string
+  tts_model: string
+  tts_stability: number
+  tts_similarity_boost: number
+  tts_style: number
+  tts_use_speaker_boost: boolean
+  tts_speed: number
+  stt_provider: string
+  stt_language: string
+  stt_keywords: string[]
+  tools: AgentTool[]
+  system_prompt: string
+  first_message: string
+  recording_enabled: boolean
+  recording_channels: number
+  post_call_analyses: { name: string; model: string; prompt?: string; output_type: string }[]
+  idle_timeout_secs: number
+  idle_message: string
+  max_call_duration_secs: number
+  voicemail_action: string
+  voicemail_message: string
+  max_retries: number
+  retry_delay_secs: number
+  default_concurrency: number
+  calling_window_start: string
+  calling_window_end: string
+  calling_window_days: string[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Row in Supabase agent_drafts — same shape as Agent + draft metadata */
+export interface AgentDraft extends Agent {
+  agent_id: string
+  has_unpublished_changes: boolean
+}
+
+export interface AgentVersion {
+  id: string
+  agent_id: string
+  version_number: number
+  version_name: string
+  description: string
+  config_snapshot: Record<string, unknown>
+  phone_assignments: { number: string; friendly_name: string; direction: string }[]
+  published_at: string
+  published_by: string | null
+}
+
+export interface PhoneNumber {
+  id: string
+  number: string
+  friendly_name: string
+  inbound_agent: { id: string; name: string; display_name: string } | null
+  outbound_agent: { id: string; name: string; display_name: string } | null
+  is_active: boolean
+}
+
+export interface AgentSchema {
+  llm_models: string[]
+  tts_providers: string[]
+  tts_models: Record<string, string[]>
+  stt_providers: string[]
+  stt_languages: string[]
+  tool_types: string[]
+  tool_settings_schema: Record<string, unknown>
+  voicemail_actions: string[]
+  field_ranges: Record<string, { min: number; max: number; step: number; default: number }>
+  defaults: Record<string, unknown>
+}
+
+/** List item from GET /api/agents (id used for phone routing) */
+export interface AgentListItem {
+  id?: string
+  name: string
+  display_name: string
+  description: string
 }

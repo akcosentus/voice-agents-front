@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Layers,
   Phone,
+  PhoneCall,
   Bot,
   ChevronLeft,
   ChevronRight,
@@ -16,8 +17,9 @@ import { useState } from "react"
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/batches", label: "Batches", icon: Layers },
-  { href: "/calls", label: "Calls", icon: Phone },
   { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/phone-numbers", label: "Phone Numbers", icon: PhoneCall },
+  { href: "/calls", label: "Calls", icon: Phone },
 ]
 
 export function Sidebar() {
