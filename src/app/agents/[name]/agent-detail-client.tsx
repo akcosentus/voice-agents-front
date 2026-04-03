@@ -17,7 +17,12 @@ import {
 } from "@/lib/api"
 import { supabase } from "@/lib/supabase"
 import type { AgentDraft, AgentSchema, AgentVersion } from "@/lib/types"
-import { draftToApiPayload, extractPromptVariables, liveAgentToDraftRow } from "@/lib/agent-draft"
+import {
+  apiResponseToDraftRow,
+  draftToApiPayload,
+  extractPromptVariables,
+  liveAgentToDraftRow,
+} from "@/lib/agent-draft"
 import { relativeTime } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -195,11 +200,11 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
   const initDraftFromLive = async () => {
     try {
       const live = await getAgent(decodedName)
-      const { error } = await supabase.from("agent_drafts").insert({
-        ...live,
+      const row = apiResponseToDraftRow(live, {
         agent_id: live.id,
         has_unpublished_changes: false,
       })
+      const { error } = await supabase.from("agent_drafts").insert(row)
       if (error) {
         toast.error(error.message)
         return
@@ -303,11 +308,11 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
     setCloning(true)
     try {
       const created = await cloneAgent(decodedName, { name: cloneName.trim(), display_name: cloneDisplay.trim() })
-      await supabase.from("agent_drafts").insert({
-        ...created,
+      const draftRow = apiResponseToDraftRow(created, {
         agent_id: created.id,
         has_unpublished_changes: false,
       })
+      await supabase.from("agent_drafts").insert(draftRow)
       toast.success("Agent cloned")
       router.push(`/agents/${encodeURIComponent(created.name)}`)
     } catch (e) {
@@ -318,11 +323,11 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
 
   const revertVersion = async (v: AgentVersion) => {
     if (!draft) return
-    const snap = v.config_snapshot as Record<string, unknown>
-    const { error } = await supabase
-      .from("agent_drafts")
-      .update({ ...snap, has_unpublished_changes: true })
-      .eq("agent_id", draft.agent_id)
+    const row = apiResponseToDraftRow(v.config_snapshot, {
+      agent_id: draft.agent_id,
+      has_unpublished_changes: true,
+    })
+    const { error } = await supabase.from("agent_drafts").update(row).eq("agent_id", draft.agent_id)
     if (error) {
       toast.error(error.message)
       return

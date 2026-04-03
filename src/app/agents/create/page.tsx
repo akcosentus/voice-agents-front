@@ -28,7 +28,7 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { ArrowLeft, Loader2, Plus, Trash2, X } from "lucide-react"
 import { AgentToolCard, AddToolMenu } from "@/components/agent-tool-editor"
-import { extractPromptVariables } from "@/lib/agent-draft"
+import { apiResponseToDraftRow, extractPromptVariables } from "@/lib/agent-draft"
 
 type FormState = Omit<Agent, "id" | "name" | "created_at" | "updated_at">
 
@@ -132,11 +132,10 @@ export default function CreateAgentPage() {
       }
       const created = await createAgent(payload)
 
-      const draftRow = {
-        ...created,
+      const draftRow = apiResponseToDraftRow(created, {
         agent_id: created.id,
         has_unpublished_changes: false,
-      }
+      })
       const { error: insErr } = await supabase.from("agent_drafts").insert(draftRow)
       if (insErr) {
         toast.error(`Agent created but draft row failed: ${insErr.message}`)
