@@ -70,8 +70,12 @@ export function AppSidebar() {
     <SidebarRoot
       collapsible="icon"
       className="group/side-nav"
-      onClick={() => {
-        if (!expanded && !isMobile) setOpen(true)
+      onClick={(e) => {
+        if (!expanded && !isMobile) {
+          const target = e.target as HTMLElement
+          if (target.closest("a, button, [role='button']")) return
+          setOpen(true)
+        }
       }}
       style={!expanded && !isMobile ? { cursor: "pointer" } : undefined}
     >
@@ -118,7 +122,7 @@ export function AppSidebar() {
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="text-muted-foreground hover:bg-black/[0.06] hover:text-foreground group-hover/side-nav:bg-black/[0.06] group-hover/side-nav:text-foreground"
+              className="expand-chevron text-muted-foreground hover:bg-black/[0.06] hover:text-foreground"
               aria-label="Expand sidebar"
               title="Expand sidebar"
               onClick={() => setOpen(true)}

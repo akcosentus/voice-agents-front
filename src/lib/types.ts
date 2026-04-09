@@ -43,6 +43,7 @@ export interface Batch {
   id: string
   name: string
   agent_name: string
+  agent_display_name?: string | null
   from_number: string
   status: "draft" | "validating" | "ready" | "running" | "completed" | "failed" | "scheduled" | "paused" | "canceled"
   total_rows: number

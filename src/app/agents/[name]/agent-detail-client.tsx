@@ -19,8 +19,7 @@ import {
   extractPromptVariables,
   liveAgentToDraftRow,
 } from "@/lib/agent-draft"
-import { cn, formatPhoneNumberLabel, relativeTime } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
+import { cn, formatPhoneNumberLabel } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -68,7 +67,7 @@ import {
   voiceTemperatureRange,
 } from "@/components/agent-editor-fields"
 import { toast } from "sonner"
-import { AlertTriangle, ChevronRight, Clock, FileText, Info, List, Loader2, Lock, Pause, Pencil, Play, Plus } from "lucide-react"
+import { AlertTriangle, ChevronRight, Clock, FileText, Info, List, Loader2, Lock, Pause, Pencil, Play, Plus, X } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { TestCallPanel } from "@/components/test-call-panel"
 import { VoicePicker, useResolvedVoice } from "@/components/voice-picker"
@@ -76,20 +75,12 @@ import { useAudioPreview } from "@/hooks/use-audio-preview"
 import { AddVoiceModal } from "@/components/add-voice-modal"
 import { AgentConfigSection } from "@/components/agent-config-section"
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { PostCallFieldEditor } from "@/components/post-call-field-editor"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 function publishBody(draft: AgentDraft): Record<string, unknown> {
   const p = draftToApiPayload(draft)
@@ -106,58 +97,14 @@ function errMessage(e: unknown): string {
   return String(e)
 }
 
-/** Normalize post_call_analyses from either old array or new object format */
-function extractPostCallInfo(pca: unknown): { model: string | null; fields: { name: string; type: string }[] } {
-  // New format: { model, fields: [{name, type, description, ...}] }
-  if (pca != null && typeof pca === "object" && !Array.isArray(pca)) {
-    const o = pca as Record<string, unknown>
-    if (Array.isArray(o.fields)) {
-      const model = typeof o.model === "string" && o.model.trim() ? o.model.trim() : null
-      const fields = o.fields.map((f: unknown) => {
-        const fo = f && typeof f === "object" ? (f as Record<string, unknown>) : {}
-        return {
-          name: typeof fo.name === "string" ? fo.name : "field",
-          type: typeof fo.type === "string" ? fo.type : "text",
-        }
-      })
-      return { model, fields }
-    }
-  }
-  // Old format: [{name, model, output_type, prompt?}]
-  if (Array.isArray(pca)) {
-    const firstModel = pca[0] && typeof pca[0] === "object" && typeof (pca[0] as Record<string, unknown>).model === "string"
-      ? ((pca[0] as Record<string, unknown>).model as string).trim() || null
-      : null
-    const fields = pca.map((item: unknown) => {
-      const o = item && typeof item === "object" ? (item as Record<string, unknown>) : {}
-      return {
-        name: typeof o.name === "string" ? o.name : "field",
-        type: typeof o.output_type === "string" ? o.output_type : "text",
-      }
-    })
-    return { model: firstModel, fields }
-  }
-  return { model: null, fields: [] }
-}
-
-/** Human-readable lines from stored `config_snapshot` for version history UI */
-function summarizeVersionSnapshot(snap: Record<string, unknown>) {
-  const tools = Array.isArray(snap.tools) ? snap.tools.length : 0
-  const pcaInfo = extractPostCallInfo(snap.post_call_analyses)
-  const postFields = pcaInfo.fields.length
-  const llm =
-    typeof snap.llm_model === "string" && snap.llm_model.trim() ? snap.llm_model.trim() : null
-  const voice =
-    typeof snap.tts_voice_id === "string" && snap.tts_voice_id.trim()
-      ? snap.tts_voice_id.trim()
-      : null
-  const displayName =
-    typeof snap.display_name === "string" && snap.display_name.trim()
-      ? snap.display_name.trim()
-      : typeof snap.name === "string" && snap.name.trim()
-        ? snap.name.trim()
-        : null
-  return { tools, postFields, pcaInfo, llm, voice, displayName }
+function formatVersionDate(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
 }
 
 function normalizeRoutePhoneId(id: string | null | undefined): string | null {
@@ -222,8 +169,8 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
     | { type: "postField"; index: number; label: string }
   >(null)
   const [editingField, setEditingField] = useState<{ index: number | null; field: PostCallField } | null>(null)
-  const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [previewVersion, setPreviewVersion] = useState<AgentVersion | null>(null)
   const [editingName, setEditingName] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const configColumnRef = useRef<HTMLDivElement>(null)
@@ -505,6 +452,18 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
   const { playingId: voicePlayingId, toggle: toggleVoicePreview } = useAudioPreview()
   const [addVoiceOpen, setAddVoiceOpen] = useState(false)
 
+  const previewDraft = useMemo(() => {
+    if (!previewVersion || !draft) return null
+    const snap = previewVersion.config_snapshot as Record<string, unknown>
+    const row = apiResponseToDraftRow(snap, {
+      agent_id: draft.agent_id,
+      has_unpublished_changes: false,
+    }) as unknown as AgentDraft
+    row.name = draft.name
+    row.display_name = typeof snap.display_name === "string" ? snap.display_name : draft.display_name
+    return row
+  }, [previewVersion, draft])
+
   if (loading || !voicesLoaded) {
     return (
       <div className="flex h-[calc(100vh-3rem)] flex-col overflow-hidden">
@@ -554,6 +513,10 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
     )
   }
 
+  const activeDraft = previewDraft ?? draft
+  const isReadOnly = !!previewVersion
+  const nextVersionNum = versions.length ? Math.max(...versions.map((v) => v.version_number)) + 1 : 1
+
   const fr = schema.field_ranges
   const tempRange = temperatureRange(fr)
   const mtRange = llmMaxTokensRange(fr)
@@ -562,6 +525,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
   const exprRange = expressivenessRange(fr)
 
   const setF = (patch: Record<string, unknown>) => {
+    if (isReadOnly) return
     void patchDraft(patch)
   }
 
@@ -605,246 +569,105 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
               type="button"
               variant="outline"
               size="icon-sm"
-              className="bg-white hover:bg-[var(--color-brand-light)]/60"
+              className={cn(
+                "bg-white hover:bg-[var(--color-brand-light)]/60",
+                historyOpen && "bg-[var(--color-brand-light)] text-[var(--color-brand)]"
+              )}
               title="Version history"
               aria-label="Version history"
-              onClick={() => setHistoryOpen(true)}
+              onClick={() => {
+                if (historyOpen) {
+                  setHistoryOpen(false)
+                  setPreviewVersion(null)
+                } else {
+                  setHistoryOpen(true)
+                }
+              }}
             >
               <Clock className="size-4" />
             </Button>
-            <span className="relative inline-flex">
-              {draft.has_unpublished_changes && (
-                <span
-                  className="absolute -top-1 -right-1 z-10 size-2 rounded-full bg-amber-400 ring-2 ring-[#f4f5f7] shadow-sm"
-                  title="Unpublished draft changes"
-                  aria-hidden
-                />
-              )}
-              <Button
-                size="sm"
-                disabled={!draft.has_unpublished_changes}
-                className="bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-dark)]"
-                title={
-                  draft.has_unpublished_changes
-                    ? "Publish draft — replaces live agent"
-                    : "No unpublished changes"
-                }
-                onClick={() => setPublishOpen(true)}
-              >
-                Publish
-              </Button>
-            </span>
-            {draft.has_unpublished_changes && (
-              <Button type="button" variant="destructive" size="sm" onClick={() => setDiscardOpen(true)}>
-                Discard
-              </Button>
+            {!isReadOnly && (
+              <>
+                <span className="relative inline-flex">
+                  {draft.has_unpublished_changes && (
+                    <span
+                      className="absolute -top-1 -right-1 z-10 size-2 rounded-full bg-amber-400 ring-2 ring-[#f4f5f7] shadow-sm"
+                      title="Unpublished draft changes"
+                      aria-hidden
+                    />
+                  )}
+                  <Button
+                    size="sm"
+                    disabled={!draft.has_unpublished_changes}
+                    className="bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-dark)]"
+                    title={
+                      draft.has_unpublished_changes
+                        ? "Publish draft — replaces live agent"
+                        : "No unpublished changes"
+                    }
+                    onClick={() => setPublishOpen(true)}
+                  >
+                    Publish
+                  </Button>
+                </span>
+                {draft.has_unpublished_changes && (
+                  <Button type="button" variant="destructive" size="sm" onClick={() => setDiscardOpen(true)}>
+                    Discard
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
 
-      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent side="right" resizable defaultWidth={780} minWidth={380} maxWidthPercent={55} className="flex w-full flex-col overflow-hidden sm:max-w-lg">
-          <SheetHeader className="shrink-0 space-y-3 px-6 pt-6 pb-2 text-left">
-            <SheetTitle className="text-lg font-semibold tracking-tight">Version history</SheetTitle>
-            <SheetDescription className="text-[15px] leading-relaxed text-foreground/85">
-              Published snapshots you can review or restore as a draft.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-6 pt-2">
-            {versions.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-black/[0.08] bg-secondary/30 px-4 py-10 text-center">
-                <p className="text-sm font-medium text-foreground">No published versions yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Publish your agent to create the first snapshot in history.
-                </p>
-              </div>
-            ) : (
-              versions.map((v) => {
-                const snap = (v.config_snapshot ?? {}) as Record<string, unknown>
-                const sum = summarizeVersionSnapshot(snap)
-                const isOpen = expandedVersionId === v.id
-                return (
-                  <Collapsible
-                    key={v.id}
-                    open={isOpen}
-                    onOpenChange={(open) => setExpandedVersionId(open ? v.id : null)}
-                  >
-                    <div
-                      className={cn(
-                        "overflow-hidden rounded-xl bg-secondary/50 transition-colors",
-                        isOpen && "bg-secondary/60"
-                      )}
-                    >
-                      <CollapsibleTrigger
-                        className={cn(
-                          "group flex w-full flex-col gap-2.5 px-4 py-4 text-left outline-none transition-colors",
-                          "hover:bg-secondary/40",
-                          "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2"
-                        )}
-                      >
-                        <div className="flex items-start gap-3">
-                          <ChevronRight
-                            className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-90"
-                            aria-hidden
-                          />
-                          <div className="min-w-0 flex-1 space-y-1.5">
-                            <div className="flex flex-wrap items-baseline justify-between gap-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-md bg-[var(--color-brand-light)] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[var(--color-brand)]">
-                                  V{v.version_number}
-                                </span>
-                                {(() => {
-                                  const raw = v.version_name?.trim() ?? ""
-                                  if (raw && raw !== `V${v.version_number}`) {
-                                    return (
-                                      <span className="text-sm font-semibold text-foreground">{raw}</span>
-                                    )
-                                  }
-                                  return (
-                                    <span className="text-sm font-medium text-muted-foreground">
-                                      Published snapshot
-                                    </span>
-                                  )
-                                })()}
-                              </div>
-                              <time
-                                className="shrink-0 text-xs tabular-nums text-muted-foreground"
-                                dateTime={v.published_at}
-                              >
-                                {relativeTime(v.published_at)}
-                              </time>
-                            </div>
-                            {v.description?.trim() ? (
-                              <p className="text-sm leading-relaxed text-muted-foreground">{v.description.trim()}</p>
-                            ) : (
-                              <p className="text-sm italic text-muted-foreground/70">No release notes</p>
-                            )}
-                          </div>
-                        </div>
-                        {v.phone_assignments && v.phone_assignments.length > 0 ? (
-                          <div className="flex flex-wrap gap-1.5 pl-7">
-                            {v.phone_assignments.map((p, i) => (
-                              <Badge
-                                key={i}
-                                variant="secondary"
-                                className="bg-white font-normal text-xs text-foreground"
-                              >
-                                <span className="font-medium capitalize text-muted-foreground">
-                                  {p.direction}
-                                </span>
-                                <span className="mx-1 text-muted-foreground">·</span>
-                                {formatPhoneNumberLabel(p)}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : null}
-                      </CollapsibleTrigger>
-
-                      <CollapsibleContent>
-                        <div className="space-y-4 px-4 pb-4 pt-1">
-                          <div className="rounded-lg bg-white px-3.5 py-3">
-                            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                              Published configuration
-                            </p>
-                            <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-2">
-                              {sum.displayName ? (
-                                <>
-                                  <dt className="text-muted-foreground">Display name</dt>
-                                  <dd className="font-medium text-foreground">{sum.displayName}</dd>
-                                </>
-                              ) : null}
-                              <dt className="text-muted-foreground">LLM</dt>
-                              <dd className="font-mono text-xs text-foreground">{sum.llm ?? "—"}</dd>
-                              {sum.voice ? (
-                                <>
-                                  <dt className="text-muted-foreground">Voice ID</dt>
-                                  <dd className="break-all font-mono text-xs text-foreground">{sum.voice}</dd>
-                                </>
-                              ) : null}
-                              <dt className="text-muted-foreground">Tools</dt>
-                              <dd className="text-foreground">{sum.tools} configured</dd>
-                              <dt className="text-muted-foreground">Post-call fields</dt>
-                              <dd className="text-foreground">{sum.postFields} field{sum.postFields !== 1 ? "s" : ""}</dd>
-                              {sum.pcaInfo.model ? (
-                                <>
-                                  <dt className="text-muted-foreground">Post-call model</dt>
-                                  <dd className="font-mono text-xs text-foreground">{sum.pcaInfo.model}</dd>
-                                </>
-                              ) : null}
-                            </dl>
-                            {sum.pcaInfo.fields.length > 0 ? (
-                              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                                {sum.pcaInfo.fields.map((f, fi) => (
-                                  <span key={fi} className="rounded-md bg-secondary/80 px-2 py-0.5 text-xs text-foreground">
-                                    {f.name} <span className="text-muted-foreground">({f.type})</span>
-                                  </span>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          {typeof snap.system_prompt === "string" && snap.system_prompt.trim() ? (
-                            <div>
-                              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                System prompt
-                              </p>
-                              <div className="max-h-72 overflow-y-auto rounded-lg bg-white">
-                                <pre className="px-3.5 py-3 text-xs leading-relaxed whitespace-pre-wrap break-words text-foreground/90">
-{snap.system_prompt.trim()}
-                                </pre>
-                              </div>
-                            </div>
-                          ) : null}
-
-                          <details className="overflow-hidden rounded-lg bg-white">
-                            <summary className="cursor-pointer select-none px-3.5 py-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/40 hover:text-foreground">
-                              Raw configuration (JSON)
-                            </summary>
-                            <div className="max-h-48 overflow-y-auto">
-                              <pre className="px-3.5 pb-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words text-foreground/80">
-{JSON.stringify(v.config_snapshot, null, 2)}
-                              </pre>
-                            </div>
-                          </details>
-
-                          <div className="flex items-center gap-3 pt-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="font-medium bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-dark)]"
-                              onClick={() => {
-                                void revertVersion(v)
-                                setHistoryOpen(false)
-                              }}
-                            >
-                              Revert draft to this version
-                            </Button>
-                            <p className="text-[11px] leading-relaxed text-muted-foreground">
-                              Updates your draft only. Publish when ready.
-                            </p>
-                          </div>
-                        </div>
-                      </CollapsibleContent>
-                    </div>
-                  </Collapsible>
-                )
-              })
-            )}
+      {/* Version preview banner */}
+      {previewVersion && (
+        <div className="mb-3 flex items-center justify-between gap-4 rounded-2xl border border-[var(--color-brand)]/20 bg-[var(--color-brand-light)] px-5 py-2.5">
+          <p className="text-sm text-foreground">
+            Viewing{" "}
+            <span className="font-semibold">V{previewVersion.version_number}</span>
+            {" — Published "}
+            {formatVersionDate(previewVersion.published_at)}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-dark)]"
+              onClick={() => {
+                const v = previewVersion
+                setPreviewVersion(null)
+                void revertVersion(v)
+              }}
+            >
+              Restore this version
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPreviewVersion(null)}
+            >
+              Back to draft
+            </Button>
           </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+      )}
 
-      {/* Three-pillar grid — fills remaining height, no page scroll */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,49fr)_minmax(0,24fr)_minmax(0,27fr)]">
+      {/* Editor columns — flex layout with CSS-driven transitions */}
+      <div
+        className="agent-editor-cols min-h-0 flex-1 flex-col gap-3 overflow-hidden max-lg:flex max-lg:flex-col"
+        data-history={historyOpen ? "true" : "false"}
+      >
         {/* Left column — Prompt editor */}
-        <div className="flex min-h-0 min-w-0 flex-col">
+        <div data-col="prompt" className={cn("flex min-h-0 min-w-0 flex-col", isReadOnly && "pointer-events-none opacity-70")}>
           <Card className={cn(promptCardClassName(), "flex min-h-0 flex-1 flex-col")}>
             <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pt-3 pb-3">
               <div className="flex shrink-0 items-end gap-4">
                 <div className="flex min-w-0 flex-[3] flex-col gap-1.5">
                   <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">LLM Model</span>
-                  <Select value={draft.llm_model} onValueChange={(v) => setF({ llm_model: v ?? "" })}>
+                  <Select value={activeDraft.llm_model} onValueChange={(v) => setF({ llm_model: v ?? "" })}>
                     <SelectTrigger className="h-9 w-full bg-white text-xs hover:bg-[var(--color-brand-light)]/60" aria-label="LLM model">
                       <span className="flex min-w-0 items-center gap-1.5 truncate">
                         <img src="/anthropic-logo.svg" alt="" className="size-3.5 shrink-0" />
@@ -861,7 +684,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
                 <div className="flex min-w-0 flex-[4] flex-col gap-1.5">
                   <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Voice</span>
                   <VoicePicker
-                    value={draft.tts_voice_id}
+                    value={activeDraft.tts_voice_id}
                     onChange={(id) => setF({ tts_voice_id: id })}
                     className="w-full border-0 hover:bg-[var(--color-brand-light)]/60"
                     initialVoices={resolvedVoices}
@@ -869,12 +692,12 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
                 </div>
                 <div className="flex min-w-0 flex-[3] flex-col gap-1.5">
                   <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">TTS Model</span>
-                  <Select value={draft.tts_model} onValueChange={(v) => setF({ tts_model: v ?? "" })}>
+                  <Select value={activeDraft.tts_model} onValueChange={(v) => setF({ tts_model: v ?? "" })}>
                     <SelectTrigger className="h-9 w-full bg-white text-xs hover:bg-[var(--color-brand-light)]/60" aria-label="Voice model">
                       <SelectValue placeholder="Voice model" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(schema.tts_models[draft.tts_provider] ?? []).map((m) => (
+                      {(schema.tts_models[activeDraft.tts_provider] ?? []).map((m) => (
                         <SelectItem key={m} value={m}>{m}</SelectItem>
                       ))}
                     </SelectContent>
@@ -883,7 +706,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
               </div>
               <Textarea
                 className="w-full min-w-0 flex-1 resize-none overflow-y-auto bg-white font-[JetBrains_Mono,monospace] text-sm leading-relaxed"
-                value={draft.system_prompt}
+                value={activeDraft.system_prompt}
                 onChange={(e) => setF({ system_prompt: e.target.value })}
                 placeholder="You are a helpful assistant..."
               />
@@ -893,27 +716,28 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
 
         {/* Center column — Config */}
         <div
+          data-col="config"
           ref={configColumnRef}
           id="agent-config-column"
-          className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden"
+          className={cn("min-h-0 min-w-0 overflow-y-auto overflow-x-hidden", isReadOnly && "opacity-70")}
         >
           <div className="surface-card divide-y divide-[#e8eaed] overflow-hidden">
           <AgentConfigSection title="LLM">
-            <FieldGroup className="gap-5">
+            <FieldGroup className={cn("gap-5", isReadOnly && "pointer-events-none")}>
               <p className="text-xs text-muted-foreground">
                 Provider: <span className="font-medium text-foreground">anthropic</span> · Model switch is in the bar above.
               </p>
             <SchemaSlider
               label="Temperature"
               helper="Controls response randomness. 0.7 is recommended for most agents."
-              value={draft.temperature}
+              value={activeDraft.temperature}
               onChange={(v) => setF({ temperature: v })}
               range={tempRange}
             />
             <SchemaSlider
               label="Max Response Tokens"
               helper="Maximum tokens per response turn. Voice responses should be concise."
-              value={draft.max_tokens}
+              value={activeDraft.max_tokens}
               onChange={(v) => setF({ max_tokens: Math.round(v) })}
               range={mtRange}
             />
@@ -921,14 +745,14 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
           </AgentConfigSection>
 
           <AgentConfigSection title="Voice">
-            <FieldGroup className="gap-5">
+            <FieldGroup className={cn("gap-5", isReadOnly && "pointer-events-none")}>
               <p className="text-xs text-muted-foreground">
                 Provider: <span className="font-medium text-foreground">elevenlabs</span> · Voice and model selectors are in the quick bar.
               </p>
             <SchemaSlider
               label="Speed"
               helper="How fast the agent speaks. 0.7 (slower) to 1.2 (faster)."
-              value={draft.tts_speed}
+              value={activeDraft.tts_speed}
               onChange={(v) => setF({ tts_speed: v })}
               range={speedRange}
               formatValue={(v) => `${Number(v).toFixed(2)}x`}
@@ -937,7 +761,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
               label="Voice Consistency"
               helper="How predictable the voice sounds."
               helperTooltip="Lower values add natural variation but may introduce artifacts like breathing or pitch shifts. Higher values are cleaner and more professional. Recommended: 0.70–0.85."
-              value={draft.tts_stability}
+              value={activeDraft.tts_stability}
               onChange={(v) => setF({ tts_stability: v })}
               range={voiceTempRange}
             />
@@ -952,7 +776,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
               label="Style"
               helper="Amplifies vocal expressiveness."
               helperTooltip="0 is neutral. Higher values add personality but may increase latency."
-              value={draft.tts_style}
+              value={activeDraft.tts_style}
               onChange={(v) => setF({ tts_style: v })}
               range={exprRange}
             />
@@ -962,7 +786,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
             >
               <Switch
                 id="agent-speaker-boost"
-                checked={draft.tts_use_speaker_boost}
+                checked={activeDraft.tts_use_speaker_boost}
                 onCheckedChange={(c) => setF({ tts_use_speaker_boost: !!c })}
                 className="mt-0.5"
               />
@@ -989,12 +813,13 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
                 What the agent is allowed to do during a call (hang up, dial digits, transfer, etc.).
               </FieldDescription>
             <div className="space-y-4">
-              {draft.tools.map((tool, idx) => (
+              {activeDraft.tools.map((tool, idx) => (
                 <AgentToolCard
                   key={idx}
                   tool={tool}
+                  readOnly={isReadOnly}
                   onChange={(t) => {
-                    const next = [...draft.tools]
+                    const next = [...activeDraft.tools]
                     next[idx] = t
                     setF({ tools: next })
                   }}
@@ -1002,25 +827,27 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
                     setPendingDelete({
                       type: "tool",
                       index: idx,
-                      label: formatAgentToolTypeLabel(draft.tools[idx]!.type),
+                      label: formatAgentToolTypeLabel(activeDraft.tools[idx]!.type),
                     })
                   }
                 />
               ))}
-              <AddToolMenu
-                schema={schema}
-                existing={draft.tools.map((t) => t.type)}
-                onAdd={(type) => {
-                  const desc =
-                    (schema.tool_settings_schema as Record<string, { description?: string }>)?.[type]?.description ?? ""
-                  setF({
-                    tools: [
-                      ...draft.tools,
-                      { type, description: typeof desc === "string" ? desc : "", settings: {} },
-                    ],
-                  })
-                }}
-              />
+              {!isReadOnly && (
+                <AddToolMenu
+                  schema={schema}
+                  existing={activeDraft.tools.map((t) => t.type)}
+                  onAdd={(type) => {
+                    const desc =
+                      (schema.tool_settings_schema as Record<string, { description?: string }>)?.[type]?.description ?? ""
+                    setF({
+                      tools: [
+                        ...activeDraft.tools,
+                        { type, description: typeof desc === "string" ? desc : "", settings: {} },
+                      ],
+                    })
+                  }}
+                />
+              )}
             </div>
             </FieldGroup>
           </AgentConfigSection>
@@ -1032,8 +859,8 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
               </FieldDescription>
 
               <div className="space-y-2">
-                {draft.post_call_analyses.fields.length > 0 && (
-                  draft.post_call_analyses.fields.map((f, i) => (
+                {activeDraft.post_call_analyses.fields.length > 0 && (
+                  activeDraft.post_call_analyses.fields.map((f, i) => (
                     <div
                       key={`${f.name}-${i}`}
                       className="rounded-lg bg-white p-3"
@@ -1062,21 +889,23 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            title="Edit"
+                            title={isReadOnly ? "View" : "Edit"}
                             onClick={() => setEditingField({ index: i, field: { ...f } })}
                           >
                             <Pencil size={14} />
                           </Button>
-                          <DeleteIconButton
-                            title="Delete field"
-                            onClick={() =>
-                              setPendingDelete({
-                                type: "postField",
-                                index: i,
-                                label: f.name || "this field",
-                              })
-                            }
-                          />
+                          {!isReadOnly && (
+                            <DeleteIconButton
+                              title="Delete field"
+                              onClick={() =>
+                                setPendingDelete({
+                                  type: "postField",
+                                  index: i,
+                                  label: f.name || "this field",
+                                })
+                              }
+                            />
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1084,53 +913,55 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
                 )}
               </div>
 
-              <div className="flex items-center justify-between gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline" size="sm" className="h-8">
-                      <Plus className="mr-1.5 size-4" aria-hidden />
-                      Add
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    <DropdownMenuItem
-                      onClick={() =>
-                        setEditingField({
-                          index: null,
-                          field: { name: "", type: "text", description: "", format_examples: [] },
-                        })
-                      }
-                    >
-                      <FileText className="size-4" aria-hidden />
-                      Text
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        Free-form text output
-                      </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        setEditingField({
-                          index: null,
-                          field: { name: "", type: "selector", description: "", choices: [""] },
-                        })
-                      }
-                    >
-                      <List className="size-4" aria-hidden />
-                      Selector
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        Choose from predefined options
-                      </span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              {!isReadOnly && (
+                <div className="flex items-center justify-between gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="outline" size="sm" className="h-8">
+                        <Plus className="mr-1.5 size-4" aria-hidden />
+                        Add
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem
+                        onClick={() =>
+                          setEditingField({
+                            index: null,
+                            field: { name: "", type: "text", description: "", format_examples: [] },
+                          })
+                        }
+                      >
+                        <FileText className="size-4" aria-hidden />
+                        Text
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          Free-form text output
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          setEditingField({
+                            index: null,
+                            field: { name: "", type: "selector", description: "", choices: [""] },
+                          })
+                        }
+                      >
+                        <List className="size-4" aria-hidden />
+                        Selector
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          Choose from predefined options
+                        </span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
 
-              <div className="space-y-1.5 pt-1">
+              <div className={cn("space-y-1.5 pt-1", isReadOnly && "pointer-events-none")}>
                 <Label className="text-xs text-muted-foreground">Model</Label>
                 <Select
-                  value={draft.post_call_analyses.model}
+                  value={activeDraft.post_call_analyses.model}
                   onValueChange={(v) =>
-                    setF({ post_call_analyses: { ...draft.post_call_analyses, model: v ?? "" } })
+                    setF({ post_call_analyses: { ...activeDraft.post_call_analyses, model: v ?? "" } })
                   }
                 >
                   <SelectTrigger className="h-9 w-full">
@@ -1151,7 +982,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
         </div>
 
         {/* Right column — Test panel */}
-        <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+        <div data-col="test" className={cn("flex min-h-0 min-w-0 flex-col overflow-hidden", isReadOnly && "pointer-events-none opacity-70")}>
           <TestCallPanel
             agentName={draft.name}
             displayName={draft.display_name}
@@ -1171,6 +1002,106 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
             }}
             className="min-h-0 flex-1"
           />
+        </div>
+
+        {/* History panel — 4th pillar */}
+        <div data-col="history" className="flex min-h-0 min-w-0 flex-col overflow-hidden max-lg:hidden">
+          <div className="surface-card flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex shrink-0 items-center justify-between px-6 pb-2 pt-4">
+              <h3 className="text-sm font-semibold">History</h3>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => { setHistoryOpen(false); setPreviewVersion(null) }}
+                aria-label="Close history"
+              >
+                <X className="size-3.5" />
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {versions.length === 0 && !draft.has_unpublished_changes ? (
+                <div className="px-4 py-10 text-center">
+                  <p className="text-sm font-medium text-foreground">No versions yet</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Publish to create the first snapshot.
+                  </p>
+                </div>
+              ) : (
+                <div className="relative ml-6 border-l border-[#e8eaed]">
+                  {/* Draft entry */}
+                  {draft.has_unpublished_changes && (
+                    <button
+                      type="button"
+                      className={cn(
+                        "relative flex w-full gap-3 py-3 pl-5 pr-4 text-left transition-colors hover:bg-black/[0.02]",
+                        !previewVersion && "bg-[var(--color-brand-light)]/40"
+                      )}
+                      onClick={() => setPreviewVersion(null)}
+                    >
+                      <div
+                        className={cn(
+                          "absolute left-[-5px] top-[17px] size-2.5 rounded-full ring-2 ring-[#f4f5f7]",
+                          !previewVersion ? "bg-[var(--color-brand)]" : "bg-amber-400"
+                        )}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className={cn("text-sm font-semibold", !previewVersion && "text-[var(--color-brand-dark)]")}>
+                            Draft — V{nextVersionNum}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground">Current working draft</p>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Published versions */}
+                  {versions.map((v) => {
+                    const isActive = previewVersion?.id === v.id
+                    const versionLabel = (() => {
+                      const raw = v.version_name?.trim() ?? ""
+                      return raw && raw !== `V${v.version_number}` ? raw : `V${v.version_number}`
+                    })()
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        className={cn(
+                          "relative flex w-full gap-3 py-3 pl-5 pr-4 text-left transition-colors hover:bg-black/[0.02]",
+                          isActive && "bg-[var(--color-brand-light)]/40"
+                        )}
+                        onClick={() => setPreviewVersion(v)}
+                      >
+                        <div
+                          className={cn(
+                            "absolute left-[-5px] top-[17px] size-2.5 rounded-full ring-2 ring-[#f4f5f7]",
+                            isActive ? "bg-[var(--color-brand)]" : "bg-[#d1d5db]"
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className={cn("text-sm font-semibold", isActive && "text-[var(--color-brand-dark)]")}>
+                              {versionLabel}
+                            </span>
+                            <time className="shrink-0 text-[11px] tabular-nums text-muted-foreground" dateTime={v.published_at}>
+                              {formatVersionDate(v.published_at)}
+                            </time>
+                          </div>
+                          {v.description?.trim() && (
+                            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                              {v.description.trim()}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
       {/* Publish dialog */}
@@ -1425,12 +1356,12 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
         onConfirm={() => {
           if (!pendingDelete || !draft) return
           if (pendingDelete.type === "tool") {
-            setF({ tools: draft.tools.filter((_, j) => j !== pendingDelete.index) })
+            setF({ tools: activeDraft.tools.filter((_, j) => j !== pendingDelete.index) })
           } else {
             setF({
               post_call_analyses: {
-                ...draft.post_call_analyses,
-                fields: draft.post_call_analyses.fields.filter((_, j) => j !== pendingDelete.index),
+                ...activeDraft.post_call_analyses,
+                fields: activeDraft.post_call_analyses.fields.filter((_, j) => j !== pendingDelete.index),
               },
             })
           }
@@ -1441,13 +1372,14 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
       <PostCallFieldEditor
         open={!!editingField}
         field={editingField?.field ?? null}
+        readOnly={isReadOnly}
         onCancel={() => setEditingField(null)}
         onSave={(field) => {
-          const fields = draft.post_call_analyses.fields
+          const fields = activeDraft.post_call_analyses.fields
           const next = [...fields]
           if (editingField?.index == null) next.push(field)
           else next[editingField.index] = field
-          setF({ post_call_analyses: { ...draft.post_call_analyses, fields: next } })
+          setF({ post_call_analyses: { ...activeDraft.post_call_analyses, fields: next } })
           setEditingField(null)
         }}
       />

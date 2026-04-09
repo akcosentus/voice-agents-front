@@ -96,8 +96,8 @@ export function AddVoiceModal({
         if (!o) reset()
       }}
     >
-      <DialogContent className="flex max-h-[min(85dvh,600px)] flex-col gap-0 overflow-hidden sm:max-w-md">
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+      <DialogContent className="flex max-h-[min(85dvh,600px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6 pt-6">
           <div className="space-y-5 pb-2">
             <DialogHeader className="space-y-3 text-left">
               <DialogTitle className="text-lg font-semibold tracking-tight">Add voice</DialogTitle>
@@ -198,7 +198,7 @@ export function AddVoiceModal({
           </div>
         </div>
 
-        <div className="-mx-6 -mb-6 mt-2 flex shrink-0 gap-3 rounded-b-2xl bg-secondary/20 px-6 py-5">
+        <div className="mt-2 flex shrink-0 gap-3 rounded-b-2xl bg-secondary/20 px-6 py-5">
           <Button
             type="button"
             variant="outline"

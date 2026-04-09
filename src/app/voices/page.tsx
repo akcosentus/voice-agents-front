@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { getVoices, removeVoice, getVoiceAgents } from "@/lib/api"
+import { getVoices, refreshVoice, removeVoice, getVoiceAgents } from "@/lib/api"
 import type { AgentListItem, Voice } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -19,11 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { toast } from "sonner"
 import {
   AudioLines,
@@ -33,6 +28,7 @@ import {
   Pause,
   Play,
   Plus,
+  RefreshCw,
   Trash2,
 } from "lucide-react"
 import { useAudioPreview } from "@/hooks/use-audio-preview"
@@ -50,6 +46,7 @@ export default function VoicesPage() {
   const [removeAgents, setRemoveAgents] = useState<AgentListItem[] | null>(null)
   const [removeLoading, setRemoveLoading] = useState(false)
   const [removing, setRemoving] = useState(false)
+  const [refreshingId, setRefreshingId] = useState<string | null>(null)
   const { playingId, toggle } = useAudioPreview()
 
   const load = useCallback(async () => {
@@ -181,18 +178,12 @@ export default function VoicesPage() {
                       )}
                     </div>
                     {v.description && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <p className="mt-0.5 max-w-md truncate text-xs text-muted-foreground" />
-                          }
-                        >
-                          {v.description}
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" align="start" className="max-w-sm">
-                          {v.description}
-                        </TooltipContent>
-                      </Tooltip>
+                      <p
+                        className="mt-0.5 max-w-md truncate text-xs text-muted-foreground"
+                        title={v.description}
+                      >
+                        {v.description}
+                      </p>
                     )}
                   </div>
 
@@ -209,6 +200,23 @@ export default function VoicesPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={refreshingId === v.voice_id}
+                        onClick={async () => {
+                          setRefreshingId(v.voice_id)
+                          try {
+                            const updated = await refreshVoice(v.voice_id)
+                            setVoices((prev) => prev.map((x) => x.voice_id === v.voice_id ? { ...x, ...updated } : x))
+                            toast.success("Voice updated from ElevenLabs")
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Refresh failed")
+                          }
+                          setRefreshingId(null)
+                        }}
+                      >
+                        <RefreshCw size={14} className={refreshingId === v.voice_id ? "animate-spin" : ""} />
+                        Refresh from ElevenLabs
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => {
                           navigator.clipboard.writeText(v.voice_id)

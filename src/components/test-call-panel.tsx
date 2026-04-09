@@ -568,7 +568,7 @@ export function TestCallPanel({
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="px-4 pb-4 pt-1">
-                    <div className="max-h-[min(280px,40vh)] space-y-2.5 overflow-y-auto">
+                    <div className="-mx-1 max-h-[min(280px,40vh)] space-y-2.5 overflow-y-auto px-1">
                       {promptVariables.map((key, i) => (
                         <div key={key} className="space-y-1">
                           <Label

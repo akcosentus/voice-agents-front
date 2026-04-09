@@ -27,10 +27,12 @@ export function formatAgentToolTypeLabel(type: string): string {
 
 export function AgentToolCard({
   tool,
+  readOnly,
   onChange,
   onRemove,
 }: {
   tool: AgentTool
+  readOnly?: boolean
   onChange: (t: AgentTool) => void
   onRemove: () => void
 }) {
@@ -67,34 +69,42 @@ export function AgentToolCard({
         <span className="text-sm font-semibold">{label}</span>
         <div className="flex shrink-0 items-center gap-1.5">
           {editing ? (
-            <>
+            readOnly ? (
               <Button type="button" variant="ghost" size="sm" className="h-8" onClick={cancelEdit}>
-                Cancel
+                Close
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 bg-[var(--color-brand)] px-3 text-white hover:bg-[var(--color-brand-dark)]"
-                onClick={saveEdit}
-              >
-                Save
-              </Button>
-            </>
+            ) : (
+              <>
+                <Button type="button" variant="ghost" size="sm" className="h-8" onClick={cancelEdit}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 bg-[var(--color-brand)] px-3 text-white hover:bg-[var(--color-brand-dark)]"
+                  onClick={saveEdit}
+                >
+                  Save
+                </Button>
+              </>
+            )
           ) : (
             <>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Edit tool"
-                title="Edit"
+                aria-label={readOnly ? "View tool" : "Edit tool"}
+                title={readOnly ? "View" : "Edit"}
                 onClick={startEdit}
               >
                 <Pencil size={14} aria-hidden />
               </Button>
-              <DeleteIconButton title="Remove tool" onClick={onRemove}>
-                <Trash2 size={16} className="shrink-0" />
-              </DeleteIconButton>
+              {!readOnly && (
+                <DeleteIconButton title="Remove tool" onClick={onRemove}>
+                  <Trash2 size={16} className="shrink-0" />
+                </DeleteIconButton>
+              )}
             </>
           )}
         </div>
@@ -139,7 +149,7 @@ export function AgentToolCard({
           )}
         </>
       ) : (
-        <>
+        <div className={readOnly ? "pointer-events-none" : undefined}>
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground" htmlFor={descFieldId}>
               Description
@@ -156,7 +166,7 @@ export function AgentToolCard({
           {draft.type === "transfer_call" && (
             <TransferTargetsBlock tool={draft} targets={draftTargets} onChange={setDraft} />
           )}
-        </>
+        </div>
       )}
     </div>
   )

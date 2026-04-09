@@ -336,6 +336,13 @@ export async function addVoice(voiceId: string, customName?: string): Promise<Vo
   return res.json()
 }
 
+export async function refreshVoice(voiceId: string): Promise<Voice> {
+  const res = await fetch(`${API_BASE}/api/voices/${encodeURIComponent(voiceId)}/refresh`, { method: "POST" })
+  if (!res.ok) throwFromApiBody(await parseErrorBody(res))
+  const data = await res.json()
+  return data.voice ?? data
+}
+
 export async function removeVoice(voiceId: string): Promise<unknown> {
   const res = await fetch(`${API_BASE}/api/voices/${encodeURIComponent(voiceId)}`, { method: "DELETE" })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))

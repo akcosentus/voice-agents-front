@@ -177,3 +177,34 @@
 .animate-test-call-pulse {
   animation: test-call-pulse 2.2s ease-in-out infinite;
 }
+
+/* ── Collapsed sidebar: highlight chevron only on whitespace hover ── */
+[data-state="collapsed"]:hover:not(:has(a:hover, button:hover, [role="button"]:hover)) .expand-chevron {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--foreground);
+}
+
+/* ── Agent editor pillar transitions ── */
+
+@media (min-width: 1024px) {
+  .agent-editor-cols {
+    display: flex;
+    flex-direction: row;
+  }
+  .agent-editor-cols > [data-col] {
+    transition: flex 250ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+  .agent-editor-cols[data-history="false"] > [data-col="prompt"]  { flex: 49 1 0%; }
+  .agent-editor-cols[data-history="false"] > [data-col="config"]  { flex: 24 1 0%; }
+  .agent-editor-cols[data-history="false"] > [data-col="test"]    { flex: 27 1 0%; }
+  .agent-editor-cols[data-history="false"] > [data-col="history"] { flex: 0 0 0%; opacity: 0; }
+
+  .agent-editor-cols[data-history="true"] > [data-col="prompt"]  { flex: 40 1 0%; }
+  .agent-editor-cols[data-history="true"] > [data-col="config"]  { flex: 20 1 0%; }
+  .agent-editor-cols[data-history="true"] > [data-col="test"]    { flex: 20 1 0%; }
+  .agent-editor-cols[data-history="true"] > [data-col="history"] { flex: 20 1 0%; opacity: 1; }
+
+  .agent-editor-cols > [data-col="history"] {
+    transition: flex 250ms cubic-bezier(0.25, 0.1, 0.25, 1), opacity 200ms ease;
+  }
+}

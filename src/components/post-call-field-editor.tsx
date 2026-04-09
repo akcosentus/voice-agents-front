@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea"
 export interface PostCallFieldEditorProps {
   open: boolean
   field: PostCallField | null
+  readOnly?: boolean
   onSave: (field: PostCallField) => void
   onCancel: () => void
 }
@@ -28,7 +29,7 @@ function cleanList(values: string[]) {
   return values.map((v) => v.trim()).filter(Boolean)
 }
 
-export function PostCallFieldEditor({ open, field, onSave, onCancel }: PostCallFieldEditorProps) {
+export function PostCallFieldEditor({ open, field, readOnly, onSave, onCancel }: PostCallFieldEditorProps) {
   const [draft, setDraft] = React.useState<PostCallField | null>(field)
   const nameRef = React.useRef<HTMLInputElement | null>(null)
 
@@ -100,7 +101,7 @@ export function PostCallFieldEditor({ open, field, onSave, onCancel }: PostCallF
             </DialogHeader>
 
             {!draft ? null : (
-              <>
+              <div className={readOnly ? "pointer-events-none" : undefined}>
                 <div className="rounded-xl border border-black/[0.06] bg-secondary/50 px-4 py-4">
                   <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     Field details
@@ -130,20 +131,22 @@ export function PostCallFieldEditor({ open, field, onSave, onCancel }: PostCallF
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-black/[0.06] bg-secondary/50 px-4 py-4">
+                <div className="mt-5 rounded-xl border border-black/[0.06] bg-secondary/50 px-4 py-4">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                       {listLabel}
                     </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => setListValues([...(listValues ?? []), ""])}
-                    >
-                      + Add
-                    </Button>
+                    {!readOnly && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        onClick={() => setListValues([...(listValues ?? []), ""])}
+                      >
+                        + Add
+                      </Button>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -170,40 +173,55 @@ export function PostCallFieldEditor({ open, field, onSave, onCancel }: PostCallF
                             draft.type === "selector" ? "font-mono" : ""
                           )}
                         />
-                        <DeleteIconButton
-                          className="shrink-0"
-                          title="Remove row"
-                          onClick={() => {
-                            const next = [...listValues]
-                            next.splice(i, 1)
-                            setListValues(next)
-                          }}
-                        />
+                        {!readOnly && (
+                          <DeleteIconButton
+                            className="shrink-0"
+                            title="Remove row"
+                            onClick={() => {
+                              const next = [...listValues]
+                              next.splice(i, 1)
+                              setListValues(next)
+                            }}
+                          />
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
 
         <div className="-mx-6 -mb-6 mt-2 flex shrink-0 gap-3 rounded-b-2xl bg-secondary/20 px-6 py-5">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1 basis-0 justify-center"
-            onClick={onCancel}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            className="flex-1 basis-0 justify-center font-medium bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-dark)]"
-            onClick={validateAndSave}
-          >
-            Save field
-          </Button>
+          {readOnly ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 basis-0 justify-center"
+              onClick={onCancel}
+            >
+              Close
+            </Button>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 basis-0 justify-center"
+                onClick={onCancel}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="flex-1 basis-0 justify-center font-medium bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-dark)]"
+                onClick={validateAndSave}
+              >
+                Save field
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

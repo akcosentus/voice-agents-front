@@ -520,8 +520,8 @@ export default function PhoneNumbersPage() {
             <DialogHeader className="space-y-3 text-left">
               <DialogTitle className="text-lg font-semibold tracking-tight">Buy phone number</DialogTitle>
               <DialogDescription className="text-[15px] leading-relaxed text-foreground/85">
-                Search Twilio inventory, choose a number, and add it to your workspace. Numbers bill at
-                $2/month each.
+                Search Twilio inventory, choose a number, and add it to your workspace. Billed by
+                Twilio at ~$1.15/mo for local or ~$2.15/mo for toll-free.
               </DialogDescription>
             </DialogHeader>
 
@@ -627,7 +627,7 @@ export default function PhoneNumbersPage() {
                             </div>
                           </div>
                           <div className="shrink-0 tabular-nums text-xs text-muted-foreground">
-                            {r.price ?? "$2/mo"}
+                            {r.price ?? "~$1.15/mo"}
                           </div>
                         </button>
                       )
@@ -658,8 +658,8 @@ export default function PhoneNumbersPage() {
                   />
                 </div>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  Estimated <span className="font-medium text-foreground/80">$2.00/month</span> per number
-                  (Twilio).
+                  Estimated <span className="font-medium text-foreground/80">~$1.15/month</span> for local,{" "}
+                  <span className="font-medium text-foreground/80">~$2.15/month</span> for toll-free (billed by Twilio).
                 </p>
                 {purchaseError && (
                   <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
@@ -716,7 +716,7 @@ export default function PhoneNumbersPage() {
                 What happens next
               </p>
               <ul className="list-disc space-y-2 pl-4 text-sm leading-relaxed text-foreground/75 marker:text-muted-foreground/60">
-                <li>Monthly billing ($2/mo) for this number stops</li>
+                <li>Monthly Twilio billing (~$1.15/mo local) for this number stops</li>
                 <li>The number may be purchased by someone else</li>
                 <li>Inbound and outbound agent assignments are cleared</li>
                 <li className="font-medium text-foreground/90">This cannot be undone</li>
