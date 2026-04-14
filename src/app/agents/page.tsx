@@ -264,9 +264,8 @@ export default function AgentsPage() {
           <h3 className="mt-4 text-base font-medium">No agents configured</h3>
           <p className="mt-1 text-sm text-muted-foreground">Create an agent to get started.</p>
           <Button
-            variant="secondary"
             onClick={() => setCreateOpen(true)}
-            className="mt-4 h-9 rounded-lg px-4 text-sm font-medium"
+            className="mt-4 h-9 rounded-lg bg-[var(--color-brand)] px-4 text-sm font-medium text-white hover:bg-[var(--color-brand-dark)]"
           >
             Create Agent
           </Button>

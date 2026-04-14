@@ -172,7 +172,7 @@ export interface PhoneNumber {
 export interface AgentSchema {
   llm_models: string[]
   tts_providers: string[]
-  tts_models: Record<string, string[]>
+  tts_models: Record<string, string[]> | string[]
   stt_providers: string[]
   stt_languages: string[]
   tool_types: string[]

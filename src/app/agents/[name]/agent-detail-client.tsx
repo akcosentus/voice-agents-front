@@ -654,7 +654,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
                   <Select value={activeDraft.llm_model} onValueChange={(v) => setF({ llm_model: v ?? "" })}>
                     <SelectTrigger className="h-9 w-full bg-white text-xs hover:bg-[var(--color-brand-light)]/60" aria-label="LLM model">
                       <span className="flex min-w-0 items-center gap-1.5 truncate">
-                        <img src="/anthropic-logo.svg" alt="" className="size-3.5 shrink-0" />
+                        {activeDraft.llm_model && <img src="/anthropic-logo.svg" alt="" className="size-3.5 shrink-0" />}
                         <span className="min-w-0 truncate"><SelectValue placeholder="Model" /></span>
                       </span>
                     </SelectTrigger>
@@ -681,7 +681,10 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
                       <SelectValue placeholder="Voice model" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(schema.tts_models[activeDraft.tts_provider] ?? []).map((m) => (
+                      {(Array.isArray(schema.tts_models)
+                        ? schema.tts_models
+                        : schema.tts_models[activeDraft.tts_provider] ?? []
+                      ).map((m) => (
                         <SelectItem key={m} value={m}>{m}</SelectItem>
                       ))}
                     </SelectContent>
@@ -950,7 +953,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
                 >
                   <SelectTrigger className="h-9 w-full">
                     <span className="flex min-w-0 items-center gap-1.5 truncate">
-                      <img src="/anthropic-logo.svg" alt="" className="size-3.5 shrink-0" />
+                      {activeDraft.post_call_analyses?.model && <img src="/anthropic-logo.svg" alt="" className="size-3.5 shrink-0" />}
                       <span className="min-w-0 truncate"><SelectValue placeholder="Select model" /></span>
                     </span>
                   </SelectTrigger>
