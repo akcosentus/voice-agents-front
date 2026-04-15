@@ -64,9 +64,11 @@ import {
 // ─── Row field accessor (handles nested .data, flat row, or missing) ───
 
 function getRowField(row: Record<string, unknown>, column: string): string {
-  const data = row.data
-  if (data && typeof data === "object" && !Array.isArray(data) && column in (data as Record<string, unknown>)) {
-    return String((data as Record<string, unknown>)[column] ?? "")
+  for (const key of ["data", "case_data"] as const) {
+    const nested = row[key]
+    if (nested && typeof nested === "object" && !Array.isArray(nested) && column in (nested as Record<string, unknown>)) {
+      return String((nested as Record<string, unknown>)[column] ?? "")
+    }
   }
   if (column in row) {
     return String(row[column] ?? "")
@@ -455,15 +457,15 @@ export default function NewBatchPage() {
 
       const rawRows = data.rows as unknown as Record<string, unknown>[]
 
-      // Detect columns from response.columns, or from first row's data keys, or flat row keys
+      // Detect columns from response.columns, or from first row's data/case_data keys, or flat row keys
       const firstRow = rawRows[0]
       let cols = data.columns ?? []
       if (cols.length === 0 && firstRow) {
-        const nested = firstRow.data
+        const nested = firstRow.data ?? firstRow.case_data
         if (nested && typeof nested === "object" && !Array.isArray(nested)) {
           cols = Object.keys(nested as Record<string, unknown>)
         } else {
-          const skip = new Set(["index", "phone_raw", "phone_normalized", "status", "error", "data"])
+          const skip = new Set(["index", "row_index", "phone_raw", "phone_normalized", "phone_e164", "status", "validation", "error", "data", "case_data"])
           cols = Object.keys(firstRow).filter((k) => !skip.has(k))
         }
       }
@@ -474,20 +476,24 @@ export default function NewBatchPage() {
       setMapping(autoMap)
 
       const editableRows: EditableRow[] = rawRows.map((raw, i) => {
-        // Normalize each row's data into a flat Record<string, string>
         const rowData: Record<string, string> = {}
         for (const c of cols) {
           rowData[c] = getRowField(raw, c)
         }
 
-        const phoneRaw = phoneDet ? (rowData[phoneDet] || String(raw.phone_raw ?? "")) : String(raw.phone_raw ?? "")
+        const rawPhone = String(raw.phone_e164 ?? raw.phone_raw ?? "")
+        const phoneRaw = phoneDet ? (rowData[phoneDet] || rawPhone) : rawPhone
         const pv = validatePhone(phoneRaw)
 
+        const idx = typeof raw.row_index === "number" ? raw.row_index : typeof raw.index === "number" ? raw.index : i
+        const rawStatus = String(raw.validation ?? raw.status ?? "valid")
+        const status = (rawStatus === "valid" || rawStatus === "fixable" || rawStatus === "invalid") ? rawStatus : "valid"
+
         return {
-          index: typeof raw.index === "number" ? raw.index : i,
-          phone_raw: String(raw.phone_raw ?? ""),
-          phone_normalized: String(raw.phone_normalized ?? ""),
-          status: (raw.status as "valid" | "fixable" | "invalid") ?? "valid",
+          index: idx,
+          phone_raw: phoneRaw,
+          phone_normalized: String(raw.phone_e164 ?? raw.phone_normalized ?? ""),
+          status: status as "valid" | "fixable" | "invalid",
           error: typeof raw.error === "string" ? raw.error : null,
           data: rowData,
           excluded: false,

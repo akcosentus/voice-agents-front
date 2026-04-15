@@ -145,9 +145,9 @@ export default function VoicesPage() {
                   <button
                     type="button"
                     className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-full transition-colors",
+                      "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
                       v.preview_url
-                        ? "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-dark)]"
+                        ? "bg-[var(--color-brand)]/10 text-[var(--color-brand)] hover:bg-[var(--color-brand)]/20"
                         : "cursor-default bg-secondary text-muted-foreground"
                     )}
                     disabled={!v.preview_url}
@@ -155,9 +155,9 @@ export default function VoicesPage() {
                     aria-label={isPlaying ? "Pause preview" : "Play preview"}
                   >
                     {isPlaying ? (
-                      <Pause size={13} fill="currentColor" />
+                      <Pause size={14} fill="currentColor" />
                     ) : (
-                      <Play size={13} fill="currentColor" className="ml-0.5" />
+                      <Play size={14} fill="currentColor" className="ml-0.5" />
                     )}
                   </button>
 

@@ -560,7 +560,7 @@ export function TestCallPanel({
                     aria-hidden
                   />
                   <span>Test Variables</span>
-                  <span className="ml-auto shrink-0 text-xs font-normal tabular-nums text-muted-foreground">
+                  <span className="ml-auto hidden shrink-0 text-xs font-normal tabular-nums text-muted-foreground lg:inline">
                     {filledCount > 0
                       ? `${filledCount} of ${promptVariables.length} filled`
                       : `${promptVariables.length} variable${promptVariables.length === 1 ? "" : "s"} available`}
