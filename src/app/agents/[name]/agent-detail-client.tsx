@@ -201,7 +201,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
       const normalized = apiResponseToDraftRow(d, {
         agent_id: d.agent_id,
         has_unpublished_changes: d.has_unpublished_changes,
-      }) as unknown as AgentDraft
+      }, sch) as unknown as AgentDraft
       setDraft(normalized)
 
       const vers = await listAgentVersions(decodedName)
@@ -274,12 +274,16 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
   }, [load, decodedName])
 
   const initDraftFromLive = async () => {
+    if (!schema) {
+      toast.error("Schema not loaded")
+      return
+    }
     try {
       const live = await getLiveAgentForDraft(decodedName)
       const row = apiResponseToDraftRow(live, {
         agent_id: live.id,
         has_unpublished_changes: false,
-      })
+      }, schema)
       await saveAgentDraft(decodedName, row)
       toast.success("Draft initialized from live agent")
       load()
@@ -289,11 +293,11 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
   }
 
   const handleDiscard = async () => {
-    if (!draft) return
+    if (!draft || !schema) return
     setDiscarding(true)
     try {
       const live = await getLiveAgentForDraft(decodedName)
-      const row = liveAgentToDraftRow(live, draft.agent_id)
+      const row = liveAgentToDraftRow(live, draft.agent_id, schema)
       await saveAgentDraft(decodedName, row)
       toast.success("Draft discarded")
       setDiscardOpen(false)
@@ -423,11 +427,11 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
   }
 
   const revertVersion = async (v: AgentVersion) => {
-    if (!draft) return
+    if (!draft || !schema) return
     const row = apiResponseToDraftRow(v.config_snapshot, {
       agent_id: draft.agent_id,
       has_unpublished_changes: true,
-    })
+    }, schema)
     try {
       await saveAgentDraft(decodedName, row)
       toast.success(`Draft reverted to V${v.version_number}. Publish to make it live.`)
@@ -443,16 +447,16 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
   const [addVoiceOpen, setAddVoiceOpen] = useState(false)
 
   const previewDraft = useMemo(() => {
-    if (!previewVersion || !draft) return null
+    if (!previewVersion || !draft || !schema) return null
     const snap = previewVersion.config_snapshot as Record<string, unknown>
     const row = apiResponseToDraftRow(snap, {
       agent_id: draft.agent_id,
       has_unpublished_changes: false,
-    }) as unknown as AgentDraft
+    }, schema) as unknown as AgentDraft
     row.name = draft.name
     row.display_name = typeof snap.display_name === "string" ? snap.display_name : draft.display_name
     return row
-  }, [previewVersion, draft])
+  }, [previewVersion, draft, schema])
 
   if (loading || !voicesLoaded) {
     return (

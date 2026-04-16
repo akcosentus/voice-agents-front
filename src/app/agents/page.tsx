@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { cloneAgent, createAgent, deleteAgent, getAgents, getAgent, getPhoneNumbers, getVoices, saveAgentDraft } from "@/lib/api"
+import { cloneAgent, createAgent, deleteAgent, getAgents, getAgent, getAgentSchema, getPhoneNumbers, getVoices, saveAgentDraft } from "@/lib/api"
 import { apiResponseToDraftRow } from "@/lib/agent-draft"
 import type { Agent, AgentListItem, PhoneNumber, Voice } from "@/lib/types"
 import { formatPhone } from "@/lib/utils"
@@ -28,8 +28,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Bot, Loader2, MoreVertical, Plus } from "lucide-react"
 import { toast } from "sonner"
@@ -61,6 +59,15 @@ function mergeAgentListFields(detail: Agent, row: AgentListItem | undefined): Ag
   return { ...detail, llm_model: llm, tts_model: ttsModel, tts_voice_id: ttsVoice }
 }
 
+function generateAgentSlug(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+  let suffix = ""
+  for (let i = 0; i < 8; i++) {
+    suffix += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return `agent-${suffix}`
+}
+
 /** Comma-separated "(949) 691-3324 (inbound, outbound)" per number assigned to this agent */
 function phoneAssignmentsForAgent(agentId: string | null | undefined, phones: PhoneNumber[]): string {
   if (!agentId) return ""
@@ -85,18 +92,12 @@ export default function AgentsPage() {
   const [voiceMap, setVoiceMap] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
 
-  const [cloneTarget, setCloneTarget] = useState<Agent | null>(null)
-  const [cloneOpen, setCloneOpen] = useState(false)
-  const [cloneName, setCloneName] = useState("")
-  const [cloneDisplay, setCloneDisplay] = useState("")
   const [cloning, setCloning] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  const [createOpen, setCreateOpen] = useState(false)
-  const [createName, setCreateName] = useState("")
   const [creating, setCreating] = useState(false)
 
   const fetchAll = useCallback(async () => {
@@ -126,28 +127,21 @@ export default function AgentsPage() {
     void fetchAll()
   }, [fetchAll])
 
-  const handleClone = async () => {
-    if (!cloneTarget) return
-    if (!cloneName.trim() || !cloneDisplay.trim()) {
-      toast.error("Name and display name required")
-      return
-    }
+  const handleCloneAgent = async (source: Agent) => {
     setCloning(true)
     try {
-      const created = await cloneAgent(cloneTarget.name, {
-        name: cloneName.trim(),
-        display_name: cloneDisplay.trim(),
-      })
+      const name = generateAgentSlug()
+      const display_name = `${source.display_name?.trim() || source.name} (Copy)`
+      const [created, agentSchema] = await Promise.all([
+        cloneAgent(source.name, { name, display_name }),
+        getAgentSchema(),
+      ])
       const draftRow = apiResponseToDraftRow(created, {
         agent_id: created.id,
         has_unpublished_changes: false,
-      })
+      }, agentSchema)
       await saveAgentDraft(created.name, draftRow)
       toast.success("Agent cloned")
-      setCloneOpen(false)
-      setCloneTarget(null)
-      setCloneName("")
-      setCloneDisplay("")
       router.push(`/agents/${encodeURIComponent(created.name)}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Clone failed")
@@ -170,47 +164,27 @@ export default function AgentsPage() {
     setDeleting(false)
   }
 
-  const openCloneDialog = (agent: Agent) => {
-    setCloneTarget(agent)
-    setCloneName("")
-    setCloneDisplay(`${agent.display_name?.trim() || agent.name} (copy)`)
-    setCloneOpen(true)
-  }
-
-  const handleCreate = async () => {
-    const displayName = createName.trim()
-    if (!displayName) {
-      toast.error("Agent name is required")
-      return
-    }
-    const slug = displayName
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "")
-    if (!slug) {
-      toast.error("Name must contain at least one letter or number")
-      return
-    }
+  const handleCreateAgent = async () => {
     setCreating(true)
     try {
-      const created = await createAgent({
-        name: slug,
-        display_name: displayName,
-      })
+      const name = generateAgentSlug()
+      const [created, agentSchema] = await Promise.all([
+        createAgent({
+          name,
+          display_name: "New Agent",
+        }),
+        getAgentSchema(),
+      ])
       const draftRow = apiResponseToDraftRow(created, {
         agent_id: created.id,
         has_unpublished_changes: false,
-      })
+      }, agentSchema)
       try {
-        await saveAgentDraft(slug, draftRow)
+        await saveAgentDraft(name, draftRow)
       } catch (draftErr) {
         toast.error(`Agent created but draft row failed: ${draftErr instanceof Error ? draftErr.message : "unknown error"}`)
       }
       toast.success("Agent created")
-      setCreateOpen(false)
-      setCreateName("")
       router.push(`/agents/${encodeURIComponent(created.name)}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create agent")
@@ -226,11 +200,12 @@ export default function AgentsPage() {
           <p className="page-subtitle mt-1">Voice agent configurations</p>
         </div>
         <Button
-          onClick={() => setCreateOpen(true)}
+          onClick={() => void handleCreateAgent()}
+          disabled={creating || cloning}
           className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          <Plus size={16} className="mr-1.5" />
-          Create Agent
+          {creating ? <Loader2 size={16} className="mr-1.5 animate-spin" /> : <Plus size={16} className="mr-1.5" />}
+          New Agent
         </Button>
       </div>
 
@@ -264,10 +239,12 @@ export default function AgentsPage() {
           <h3 className="mt-4 text-base font-medium">No agents configured</h3>
           <p className="mt-1 text-sm text-muted-foreground">Create an agent to get started.</p>
           <Button
-            onClick={() => setCreateOpen(true)}
+            onClick={() => void handleCreateAgent()}
+            disabled={creating || cloning}
             className="mt-4 h-9 rounded-lg bg-[var(--color-brand)] px-4 text-sm font-medium text-white hover:bg-[var(--color-brand-dark)]"
           >
-            Create Agent
+            {creating ? <Loader2 size={16} className="mr-1.5 animate-spin" /> : <Plus size={16} className="mr-1.5" />}
+            New Agent
           </Button>
         </div>
       ) : (
@@ -324,7 +301,12 @@ export default function AgentsPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40">
-                        <DropdownMenuItem onSelect={() => openCloneDialog(agent)}>Clone</DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={cloning || creating}
+                          onSelect={() => void handleCloneAgent(agent)}
+                        >
+                          Clone
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           variant="destructive"
                           onSelect={() => {
@@ -344,73 +326,6 @@ export default function AgentsPage() {
         </Table>
       )}
       </div>
-
-      <Dialog
-        open={cloneOpen}
-        onOpenChange={(open) => {
-          setCloneOpen(open)
-          if (!open) {
-            setCloneTarget(null)
-            setCloneName("")
-            setCloneDisplay("")
-          }
-        }}
-      >
-        <DialogContent className="gap-0 overflow-hidden sm:max-w-[440px]">
-          <div className="space-y-4 pb-2">
-            <DialogHeader className="space-y-3 text-left">
-              <DialogTitle className="text-lg font-semibold tracking-tight">Clone agent</DialogTitle>
-              {cloneTarget && (
-                <DialogDescription className="text-[15px] leading-relaxed text-foreground/85">
-                  Creates a new agent with the same configuration as{" "}
-                  <span className="font-medium text-foreground">{cloneTarget.display_name}</span>.
-                </DialogDescription>
-              )}
-            </DialogHeader>
-
-            <div className="rounded-xl border border-black/[0.06] bg-secondary/50 px-4 py-3.5">
-              <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                New agent details
-              </p>
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label>New agent name (path)</Label>
-                  <Input
-                    className="font-mono text-sm"
-                    value={cloneName}
-                    onChange={(e) => setCloneName(e.target.value)}
-                    placeholder="team/new_agent"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Display name</Label>
-                  <Input value={cloneDisplay} onChange={(e) => setCloneDisplay(e.target.value)} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="-mx-6 -mb-6 mt-2 flex gap-3 rounded-b-2xl bg-secondary/20 px-6 py-5">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1 basis-0 justify-center"
-              onClick={() => setCloneOpen(false)}
-              disabled={cloning}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              className="flex-1 basis-0 justify-center font-medium"
-              onClick={() => void handleClone()}
-              disabled={cloning}
-            >
-              {cloning ? <Loader2 className="size-4 animate-spin" /> : "Clone agent"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={deleteOpen}
@@ -465,57 +380,6 @@ export default function AgentsPage() {
               disabled={deleting}
             >
               {deleting ? <Loader2 className="size-4 animate-spin" /> : "Delete agent"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={createOpen}
-        onOpenChange={(open) => {
-          setCreateOpen(open)
-          if (!open) setCreateName("")
-        }}
-      >
-        <DialogContent className="gap-0 overflow-hidden sm:max-w-[440px]">
-          <div className="space-y-4 pb-2">
-            <DialogHeader className="space-y-3 text-left">
-              <DialogTitle className="text-lg font-semibold tracking-tight">Create agent</DialogTitle>
-              <DialogDescription className="text-[15px] leading-relaxed text-foreground/85">
-                Name your agent and start configuring.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-1.5">
-              <Label>Agent Name</Label>
-              <Input
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-                placeholder="e.g. Chris — Claim Status"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && createName.trim()) void handleCreate()
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="-mx-6 -mb-6 mt-2 flex gap-3 rounded-b-2xl bg-secondary/20 px-6 py-5">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1 basis-0 justify-center"
-              onClick={() => setCreateOpen(false)}
-              disabled={creating}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              className="flex-1 basis-0 justify-center font-medium"
-              onClick={() => void handleCreate()}
-              disabled={creating || !createName.trim()}
-            >
-              {creating ? <Loader2 className="size-4 animate-spin" /> : "Create"}
             </Button>
           </div>
         </DialogContent>

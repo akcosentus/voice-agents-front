@@ -15,6 +15,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
+import type { AgentSchema } from "@/lib/types"
 
 /** Muted helper under labels (shadcn FieldDescription) */
 export function FieldHelper({
@@ -126,36 +127,32 @@ export function SchemaSlider({
   )
 }
 
-export function llmMaxTokensRange(fieldRanges: Record<string, SliderRange | undefined>): SliderRange {
-  const r = fieldRanges.max_tokens
-  if (!r) return { min: 50, max: 1000, step: 10 }
-  return {
-    min: Math.max(50, r.min),
-    max: Math.min(1000, r.max),
-    step: r.step <= 0 ? 10 : Math.min(r.step, 50),
+function requireFieldRange(fr: AgentSchema["field_ranges"], key: string): SliderRange {
+  const r = fr[key]
+  if (!r || typeof r.min !== "number" || typeof r.max !== "number" || typeof r.step !== "number") {
+    throw new Error(`agent-schema: missing or invalid field_ranges.${key}`)
   }
+  return { min: r.min, max: r.max, step: r.step }
 }
 
-export function temperatureRange(fieldRanges: Record<string, SliderRange | undefined>): SliderRange {
-  return fieldRanges.temperature ?? { min: 0, max: 1, step: 0.05 }
+export function llmMaxTokensRange(fieldRanges: AgentSchema["field_ranges"]): SliderRange {
+  return requireFieldRange(fieldRanges, "max_tokens")
 }
 
-export function ttsSpeedRange(fieldRanges: Record<string, SliderRange | undefined>): SliderRange {
-  const r = fieldRanges.tts_speed
-  if (!r) return { min: 0.7, max: 1.2, step: 0.05 }
-  return {
-    min: Math.max(0.7, r.min),
-    max: Math.min(1.2, r.max),
-    step: r.step <= 0 ? 0.05 : r.step,
-  }
+export function temperatureRange(fieldRanges: AgentSchema["field_ranges"]): SliderRange {
+  return requireFieldRange(fieldRanges, "temperature")
 }
 
-export function voiceTemperatureRange(fieldRanges: Record<string, SliderRange | undefined>): SliderRange {
-  return fieldRanges.tts_stability ?? { min: 0, max: 1, step: 0.05 }
+export function ttsSpeedRange(fieldRanges: AgentSchema["field_ranges"]): SliderRange {
+  return requireFieldRange(fieldRanges, "tts_speed")
 }
 
-export function expressivenessRange(fieldRanges: Record<string, SliderRange | undefined>): SliderRange {
-  return fieldRanges.tts_style ?? { min: 0, max: 1, step: 0.05 }
+export function voiceTemperatureRange(fieldRanges: AgentSchema["field_ranges"]): SliderRange {
+  return requireFieldRange(fieldRanges, "tts_stability")
+}
+
+export function expressivenessRange(fieldRanges: AgentSchema["field_ranges"]): SliderRange {
+  return requireFieldRange(fieldRanges, "tts_style")
 }
 
 export function promptCardClassName() {
