@@ -2,6 +2,14 @@ import type { Agent, AgentListItem, AgentSchema, PhoneNumber, Voice } from "./ty
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
 
+function authHeaders(): Record<string, string> {
+  return { "X-API-Key": process.env.NEXT_PUBLIC_COSENTUS_API_KEY || "" }
+}
+
+function jsonHeaders(): Record<string, string> {
+  return { "Content-Type": "application/json", ...authHeaders() }
+}
+
 /** Single-agent JSON may be the agent object or wrapped as `{ agent: {...} }` / `{ data: {...} }`. */
 function unwrapAgentJson<T>(data: unknown): T {
   if (data && typeof data === "object" && !Array.isArray(data)) {
@@ -23,6 +31,20 @@ async function parseErrorBody(res: Response): Promise<unknown> {
   } catch {
     return text
   }
+}
+
+function throwFromApiBody(body: unknown): never {
+  if (body instanceof Error) throw body
+  if (typeof body === "string") throw new Error(body)
+  if (body && typeof body === "object") {
+    const d = (body as { detail?: unknown }).detail
+    if (typeof d === "string") throw new Error(d)
+    if (Array.isArray(d)) {
+      const msgs = d.map((x) => (typeof x === "object" && x && "msg" in x ? String((x as { msg: string }).msg) : String(x)))
+      throw new Error(msgs.join("; ") || "Request failed")
+    }
+  }
+  throw new Error(JSON.stringify(body))
 }
 
 // ── Calls ─────────────────────────────────────────────────────────
@@ -47,19 +69,19 @@ export async function listCalls(params?: {
   if (params?.sort_by) query.set("sort_by", params.sort_by)
   if (params?.sort_order) query.set("sort_order", params.sort_order)
   const qs = query.toString()
-  const res = await fetch(`${API_BASE}/api/calls${qs ? `?${qs}` : ""}`)
+  const res = await fetch(`${API_BASE}/api/calls${qs ? `?${qs}` : ""}`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Failed to list calls: ${res.status}`)
   return res.json()
 }
 
 export async function getCall(callId: string): Promise<import("./types").Call> {
-  const res = await fetch(`${API_BASE}/api/calls/${encodeURIComponent(callId)}`)
+  const res = await fetch(`${API_BASE}/api/calls/${encodeURIComponent(callId)}`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Failed to get call: ${res.status}`)
   return res.json()
 }
 
 export async function getCallAgentNames(): Promise<{ display_name: string; agent_name: string }[]> {
-  const res = await fetch(`${API_BASE}/api/calls/agents`)
+  const res = await fetch(`${API_BASE}/api/calls/agents`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Failed to get agent names: ${res.status}`)
   const data = await res.json()
   const list = data.agents ?? data.agent_names ?? data
@@ -73,7 +95,7 @@ export async function getCallAgentNames(): Promise<{ display_name: string; agent
 }
 
 export async function getRecordingUrl(callId: string): Promise<string | null> {
-  const res = await fetch(`${API_BASE}/api/calls/${encodeURIComponent(callId)}/recording-url`)
+  const res = await fetch(`${API_BASE}/api/calls/${encodeURIComponent(callId)}/recording-url`, { headers: authHeaders() })
   if (!res.ok) return null
   const data = await res.json()
   return data.url ?? null
@@ -82,7 +104,7 @@ export async function getRecordingUrl(callId: string): Promise<string | null> {
 // ── Batches ──
 
 export async function listBatches(): Promise<import("./types").Batch[]> {
-  const res = await fetch(`${API_BASE}/api/batches`)
+  const res = await fetch(`${API_BASE}/api/batches`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Failed to list batches: ${res.status}`)
   const data = await res.json()
   return data.batches ?? data
@@ -92,13 +114,13 @@ export async function getBatch(batchId: string): Promise<{
   batch: import("./types").Batch
   calls: import("./types").Call[]
 }> {
-  const res = await fetch(`${API_BASE}/api/batches/${encodeURIComponent(batchId)}`)
+  const res = await fetch(`${API_BASE}/api/batches/${encodeURIComponent(batchId)}`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Failed to get batch: ${res.status}`)
   return res.json()
 }
 
 export async function getBatchDownloadUrl(batchId: string): Promise<string | null> {
-  const res = await fetch(`${API_BASE}/api/batches/${encodeURIComponent(batchId)}/download-url`)
+  const res = await fetch(`${API_BASE}/api/batches/${encodeURIComponent(batchId)}/download-url`, { headers: authHeaders() })
   if (!res.ok) return null
   const data = await res.json()
   return data.url ?? null
@@ -107,6 +129,7 @@ export async function getBatchDownloadUrl(batchId: string): Promise<string | nul
 export async function deleteDraftBatch(batchId: string): Promise<void> {
   await fetch(`${API_BASE}/api/batches/${encodeURIComponent(batchId)}/draft`, {
     method: "DELETE",
+    headers: authHeaders(),
   })
 }
 
@@ -117,6 +140,7 @@ export async function uploadBatch(file: File, agentName: string, fromNumber: str
   formData.append("from_number", fromNumber)
   const res = await fetch(`${API_BASE}/api/batches/upload`, {
     method: "POST",
+    headers: authHeaders(),
     body: formData,
   })
   if (!res.ok) {
@@ -132,7 +156,7 @@ export async function updateBatchRows(
 ) {
   const res = await fetch(`${API_BASE}/api/batches/${batchId}/rows`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(payload),
   })
   if (!res.ok) {
@@ -156,7 +180,7 @@ export async function startBatch(
 ) {
   const res = await fetch(`${API_BASE}/api/batches/${batchId}/start`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(options),
   })
   const body = await res.json().catch(() => ({ detail: "Start failed" }))
@@ -167,7 +191,7 @@ export async function startBatch(
 }
 
 export async function pauseBatch(batchId: string) {
-  const res = await fetch(`${API_BASE}/api/batches/${batchId}/pause`, { method: "POST" })
+  const res = await fetch(`${API_BASE}/api/batches/${batchId}/pause`, { method: "POST", headers: authHeaders() })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Pause failed" }))
     throw new Error(typeof err.detail === "string" ? err.detail : "Pause failed")
@@ -176,7 +200,7 @@ export async function pauseBatch(batchId: string) {
 }
 
 export async function resumeBatch(batchId: string) {
-  const res = await fetch(`${API_BASE}/api/batches/${batchId}/resume`, { method: "POST" })
+  const res = await fetch(`${API_BASE}/api/batches/${batchId}/resume`, { method: "POST", headers: authHeaders() })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Resume failed" }))
     throw new Error(typeof err.detail === "string" ? err.detail : "Resume failed")
@@ -185,7 +209,7 @@ export async function resumeBatch(batchId: string) {
 }
 
 export async function cancelBatch(batchId: string) {
-  const res = await fetch(`${API_BASE}/api/batches/${batchId}/cancel`, { method: "POST" })
+  const res = await fetch(`${API_BASE}/api/batches/${batchId}/cancel`, { method: "POST", headers: authHeaders() })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Cancel failed" }))
     throw new Error(typeof err.detail === "string" ? err.detail : "Cancel failed")
@@ -194,13 +218,13 @@ export async function cancelBatch(batchId: string) {
 }
 
 export async function getBatchStatus(batchId: string) {
-  const res = await fetch(`${API_BASE}/api/batches/${batchId}/status`)
+  const res = await fetch(`${API_BASE}/api/batches/${batchId}/status`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Status fetch failed: ${res.statusText}`)
   return res.json()
 }
 
 export async function downloadResults(batchId: string) {
-  const res = await fetch(`${API_BASE}/api/batches/${batchId}/results`)
+  const res = await fetch(`${API_BASE}/api/batches/${batchId}/results`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Download failed: ${res.statusText}`)
   return res.blob()
 }
@@ -208,7 +232,7 @@ export async function downloadResults(batchId: string) {
 // ── Agent Drafts ──
 
 export async function getAgentDraft(agentName: string): Promise<Record<string, unknown> | null> {
-  const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(agentName)}/draft`)
+  const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(agentName)}/draft`, { headers: authHeaders() })
   if (!res.ok) return null
   const data = await res.json()
   return data.draft ?? data
@@ -217,7 +241,7 @@ export async function getAgentDraft(agentName: string): Promise<Record<string, u
 export async function saveAgentDraft(agentName: string, draftData: Record<string, unknown>): Promise<void> {
   const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(agentName)}/draft`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(draftData),
   })
   if (!res.ok) {
@@ -229,7 +253,7 @@ export async function saveAgentDraft(agentName: string, draftData: Record<string
 // ── Agent Versions ──
 
 export async function listAgentVersions(agentName: string): Promise<import("./types").AgentVersion[]> {
-  const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(agentName)}/versions`)
+  const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(agentName)}/versions`, { headers: authHeaders() })
   if (!res.ok) return []
   const data = await res.json()
   return data.versions ?? data
@@ -241,7 +265,7 @@ export async function publishAgentVersion(
 ): Promise<Record<string, unknown>> {
   const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(agentName)}/versions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(publishData),
   })
   if (!res.ok) {
@@ -254,37 +278,23 @@ export async function publishAgentVersion(
 // ── Agents ──
 
 export async function getAgents(): Promise<AgentListItem[]> {
-  const res = await fetch(`${API_BASE}/api/agents`)
+  const res = await fetch(`${API_BASE}/api/agents`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Agents fetch failed: ${res.statusText}`)
   const data = await res.json()
   return data.agents ?? data
 }
 
 export async function getAgent(name: string): Promise<Agent> {
-  const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(name)}`)
+  const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(name)}`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Agent fetch failed: ${res.statusText}`)
   const data = await res.json()
   return unwrapAgentJson<Agent>(data)
 }
 
-function throwFromApiBody(body: unknown): never {
-  if (body instanceof Error) throw body
-  if (typeof body === "string") throw new Error(body)
-  if (body && typeof body === "object") {
-    const d = (body as { detail?: unknown }).detail
-    if (typeof d === "string") throw new Error(d)
-    if (Array.isArray(d)) {
-      const msgs = d.map((x) => (typeof x === "object" && x && "msg" in x ? String((x as { msg: string }).msg) : String(x)))
-      throw new Error(msgs.join("; ") || "Request failed")
-    }
-  }
-  throw new Error(JSON.stringify(body))
-}
-
 export async function createAgent(data: Record<string, unknown>): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/agents`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
@@ -294,7 +304,7 @@ export async function createAgent(data: Record<string, unknown>): Promise<Agent>
 export async function updateAgent(name: string, data: Record<string, unknown>): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(name)}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
@@ -302,7 +312,7 @@ export async function updateAgent(name: string, data: Record<string, unknown>): 
 }
 
 export async function deleteAgent(name: string): Promise<unknown> {
-  const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(name)}`, { method: "DELETE" })
+  const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(name)}`, { method: "DELETE", headers: authHeaders() })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
   return res.json()
 }
@@ -313,7 +323,7 @@ export async function cloneAgent(
 ): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(name)}/clone`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
@@ -321,13 +331,13 @@ export async function cloneAgent(
 }
 
 export async function getAgentSchema(): Promise<AgentSchema> {
-  const res = await fetch(`${API_BASE}/api/agent-schema`)
+  const res = await fetch(`${API_BASE}/api/agent-schema`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Schema fetch failed: ${res.statusText}`)
   return res.json()
 }
 
 export async function getAgentPrompt(name: string): Promise<{ content: string; prompt_variables: string[] }> {
-  const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(name)}/prompt`)
+  const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(name)}/prompt`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Prompt fetch failed: ${res.statusText}`)
   return res.json()
 }
@@ -355,7 +365,7 @@ export async function updateAgentPrompt(
 ): Promise<{ prompt_variables: string[]; prompt_preview: string }> {
   const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(name)}/prompt`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({ content }),
   })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
@@ -365,7 +375,7 @@ export async function updateAgentPrompt(
 // ── Phone numbers ──
 
 export async function getPhoneNumbers(): Promise<PhoneNumber[]> {
-  const res = await fetch(`${API_BASE}/api/phone-numbers`)
+  const res = await fetch(`${API_BASE}/api/phone-numbers`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Phone numbers fetch failed: ${res.statusText}`)
   const data = await res.json()
   return data.phone_numbers ?? data
@@ -374,7 +384,7 @@ export async function getPhoneNumbers(): Promise<PhoneNumber[]> {
 export async function createPhoneNumber(data: { number: string; friendly_name: string }): Promise<PhoneNumber> {
   const res = await fetch(`${API_BASE}/api/phone-numbers`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
@@ -384,7 +394,7 @@ export async function createPhoneNumber(data: { number: string; friendly_name: s
 export async function updatePhoneNumber(id: string, data: Record<string, unknown>): Promise<PhoneNumber> {
   const res = await fetch(`${API_BASE}/api/phone-numbers/${encodeURIComponent(id)}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
@@ -392,7 +402,7 @@ export async function updatePhoneNumber(id: string, data: Record<string, unknown
 }
 
 export async function syncTwilioNumbers(): Promise<{ total: number }> {
-  const res = await fetch(`${API_BASE}/api/phone-numbers/sync-twilio`, { method: "POST" })
+  const res = await fetch(`${API_BASE}/api/phone-numbers/sync-twilio`, { method: "POST", headers: authHeaders() })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
   return res.json()
 }
@@ -409,7 +419,7 @@ export async function searchAvailableNumbers(params: {
   if (params.contains) searchParams.set("contains", params.contains)
   if (params.limit) searchParams.set("limit", String(params.limit))
 
-  const res = await fetch(`${API_BASE}/api/phone-numbers/search?${searchParams}`)
+  const res = await fetch(`${API_BASE}/api/phone-numbers/search?${searchParams}`, { headers: authHeaders() })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
   return res.json()
 }
@@ -417,7 +427,7 @@ export async function searchAvailableNumbers(params: {
 export async function purchaseNumber(data: { number: string; friendly_name: string }) {
   const res = await fetch(`${API_BASE}/api/phone-numbers/purchase`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
@@ -425,7 +435,7 @@ export async function purchaseNumber(data: { number: string; friendly_name: stri
 }
 
 export async function releaseNumber(id: string) {
-  const res = await fetch(`${API_BASE}/api/phone-numbers/${encodeURIComponent(id)}/release`, { method: "POST" })
+  const res = await fetch(`${API_BASE}/api/phone-numbers/${encodeURIComponent(id)}/release`, { method: "POST", headers: authHeaders() })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
   return res.json()
 }
@@ -433,14 +443,14 @@ export async function releaseNumber(id: string) {
 // ── Voices ──
 
 export async function getVoices(): Promise<Voice[]> {
-  const res = await fetch(`${API_BASE}/api/voices`)
+  const res = await fetch(`${API_BASE}/api/voices`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Voices fetch failed: ${res.statusText}`)
   const data = await res.json()
   return data.voices ?? data
 }
 
 export async function syncVoices(): Promise<{ count: number }> {
-  const res = await fetch(`${API_BASE}/api/voices/sync`, { method: "POST" })
+  const res = await fetch(`${API_BASE}/api/voices/sync`, { method: "POST", headers: authHeaders() })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
   return res.json()
 }
@@ -448,7 +458,7 @@ export async function syncVoices(): Promise<{ count: number }> {
 export async function lookupVoice(voiceId: string): Promise<Voice> {
   const res = await fetch(`${API_BASE}/api/voices/lookup`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({ voice_id: voiceId }),
   })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
@@ -458,7 +468,7 @@ export async function lookupVoice(voiceId: string): Promise<Voice> {
 export async function addVoice(voiceId: string, customName?: string): Promise<Voice> {
   const res = await fetch(`${API_BASE}/api/voices/add`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({ voice_id: voiceId, custom_name: customName || undefined }),
   })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
@@ -466,20 +476,20 @@ export async function addVoice(voiceId: string, customName?: string): Promise<Vo
 }
 
 export async function refreshVoice(voiceId: string): Promise<Voice> {
-  const res = await fetch(`${API_BASE}/api/voices/${encodeURIComponent(voiceId)}/refresh`, { method: "POST" })
+  const res = await fetch(`${API_BASE}/api/voices/${encodeURIComponent(voiceId)}/refresh`, { method: "POST", headers: authHeaders() })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
   const data = await res.json()
   return data.voice ?? data
 }
 
 export async function removeVoice(voiceId: string): Promise<unknown> {
-  const res = await fetch(`${API_BASE}/api/voices/${encodeURIComponent(voiceId)}`, { method: "DELETE" })
+  const res = await fetch(`${API_BASE}/api/voices/${encodeURIComponent(voiceId)}`, { method: "DELETE", headers: authHeaders() })
   if (!res.ok) throwFromApiBody(await parseErrorBody(res))
   return res.json()
 }
 
 export async function getVoiceAgents(voiceId: string): Promise<AgentListItem[]> {
-  const res = await fetch(`${API_BASE}/api/voices/${encodeURIComponent(voiceId)}/agents`)
+  const res = await fetch(`${API_BASE}/api/voices/${encodeURIComponent(voiceId)}/agents`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Voice agents fetch failed: ${res.statusText}`)
   const data = await res.json()
   return data.agents ?? data
