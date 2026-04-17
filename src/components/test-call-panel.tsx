@@ -598,7 +598,7 @@ export function TestCallPanel({
         {showIdleChrome && (
           <div className="flex flex-1 flex-col gap-3 py-2">
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-2 text-center">
-              <div className="flex size-16 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <div className="flex size-16 items-center justify-center rounded-full border border-black/[0.06] bg-white text-muted-foreground">
                 <Mic className="size-8" aria-hidden />
               </div>
               <p className="text-sm font-medium text-foreground">Test your agent</p>

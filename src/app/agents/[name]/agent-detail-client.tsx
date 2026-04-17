@@ -655,10 +655,10 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
         data-history={historyOpen ? "true" : "false"}
       >
         {/* Left column — Prompt editor */}
-        <div data-col="prompt" className={cn("flex min-h-0 min-w-0 flex-col", isReadOnly && "pointer-events-none opacity-70")}>
+        <div data-col="prompt" className={cn("flex min-h-0 min-w-0 flex-col", isReadOnly && "opacity-70")}>
           <Card className={cn(promptCardClassName(), "flex min-h-0 flex-1 flex-col")}>
             <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pt-3 pb-3">
-              <div className="flex shrink-0 items-end gap-4">
+              <div className={cn("flex shrink-0 items-end gap-4", isReadOnly && "pointer-events-none")}>
                 <div className="flex min-w-0 flex-[3] flex-col gap-1.5">
                   <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">LLM Model</span>
                   <Select value={activeDraft.llm_model} onValueChange={(v) => setF({ llm_model: v ?? "" })}>
@@ -706,6 +706,7 @@ export default function AgentDetailClient({ encodedName }: { encodedName: string
                 value={activeDraft.system_prompt}
                 onChange={(v) => setF({ system_prompt: v })}
                 placeholder="You are a helpful assistant..."
+                readOnly={isReadOnly}
               />
             </CardContent>
           </Card>

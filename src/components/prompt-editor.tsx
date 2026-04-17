@@ -14,9 +14,11 @@ interface PromptEditorProps {
   onChange: (value: string) => void
   placeholder?: string
   className?: string
+  /** When true, prompt is not editable but still scrollable (e.g. version preview). */
+  readOnly?: boolean
 }
 
-export function PromptEditor({ value, onChange, placeholder, className }: PromptEditorProps) {
+export function PromptEditor({ value, onChange, placeholder, className, readOnly }: PromptEditorProps) {
   const taRef = useRef<HTMLTextAreaElement>(null)
   const bgRef = useRef<HTMLDivElement>(null)
 
@@ -61,9 +63,11 @@ export function PromptEditor({ value, onChange, placeholder, className }: Prompt
       {/* Textarea — invisible text, visible caret */}
       <textarea
         ref={taRef}
+        readOnly={readOnly}
         className={cn(
           font,
-          "relative h-full w-full resize-none overflow-y-auto bg-transparent px-3 py-3 text-transparent caret-foreground outline-none placeholder:text-muted-foreground"
+          "relative h-full w-full resize-none overflow-y-auto bg-transparent px-3 py-3 text-transparent outline-none placeholder:text-muted-foreground",
+          readOnly ? "cursor-default caret-transparent" : "caret-foreground"
         )}
         value={value}
         onChange={(e) => onChange(e.target.value)}
